@@ -200,6 +200,8 @@ public class ProjectService {
             } catch (S3Exception e) {
                 System.err.println("Failed to delete S3 file " + file.getS3Path() + ": " + e.getMessage());
             }
+            // RAG Vector DB 삭제 연쇄 호출
+            fileService.deleteVectorsFromRagServer(file.getFileId());
         }
         fileRepository.deleteAll(files);
 

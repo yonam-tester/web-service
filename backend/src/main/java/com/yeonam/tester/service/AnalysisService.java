@@ -314,6 +314,7 @@ public class AnalysisService {
                             .sourceName(ev.getSourceName())
                             .sourceSection(ev.getSourceSection())
                             .confidenceLevel(tc.getConfidenceLevel() != null ? tc.getConfidenceLevel() : "HIGH")
+                            .score(ev.getScore())
                             .build())
                     .collect(Collectors.toList());
 
@@ -408,5 +409,92 @@ public class AnalysisService {
 
         // 3. Delete analysis job itself
         analysisJobRepository.delete(job);
+    }
+
+    /**
+     * Recommends QA perspectives based on uploaded document file names and metadata.
+     */
+    @Transactional(readOnly = true)
+    public QaRecommendationResponse getQaRecommendations(String projectId) {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
+
+        List<UploadedFile> files = fileRepository.findByProject_ProjectId(projectId);
+        
+        Set<String> recommended = new LinkedHashSet<>();
+        StringBuilder reasonBuilder = new StringBuilder("업로드된 명세서 분석 결과: ");
+
+        boolean hasSecurity = false;
+        boolean hasBackend = false;
+        boolean hasFrontend = false;
+        boolean hasPerformance = false;
+        boolean hasApi = false;
+
+        for (UploadedFile file : files) {
+            String name = file.getFileName().toLowerCase();
+            // Simple keyword analysis on file names
+            if (name.contains("login") || name.contains("auth") || name.contains("security") || name.contains("비밀번호") || name.contains("보안") || name.contains("인증")) {
+                hasSecurity = true;
+            }
+            if (name.contains("payment") || name.contains("db") || name.contains("transaction") || name.contains("결제") || name.contains("서버") || name.contains("데이터베이스")) {
+                hasBackend = true;
+            }
+            if (name.contains("screen") || name.contains("ui") || name.contains("ux") || name.contains("화면") || name.contains("컴포넌트") || name.contains("렌더링") || name.contains("front")) {
+                hasFrontend = true;
+            }
+            if (name.contains("latency") || name.contains("load") || name.contains("performance") || name.contains("성능") || name.contains("부하") || name.contains("동시성") || name.contains("대용량")) {
+                hasPerformance = true;
+            }
+            if (name.contains("api") || name.contains("endpoint") || name.contains("interface") || name.contains("인터페이스") || name.contains("통신")) {
+                hasApi = true;
+            }
+        }
+
+        // Default recommendations if no files uploaded or keywords found
+        if (files.isEmpty()) {
+            recommended.add("API");
+            recommended.add("BACKEND");
+            reasonBuilder.append("등록된 프로젝트 문서가 없어 기본 QA 관점(API, BACKEND)을 추천합니다.");
+        } else {
+            List<String> matched = new ArrayList<>();
+            if (hasSecurity) {
+                recommended.add("SECURITY");
+                matched.add("보안/인증");
+            }
+            if (hasBackend) {
+                recommended.add("BACKEND");
+                matched.add("백엔드 비즈니스");
+            }
+            if (hasFrontend) {
+                recommended.add("FRONTEND");
+                matched.add("프론트엔드 UI");
+            }
+            if (hasPerformance) {
+                recommended.add("PERFORMANCE");
+                matched.add("성능/부하");
+            }
+            if (hasApi) {
+                recommended.add("API");
+                matched.add("API 인터페이스");
+            }
+
+            if (recommended.isEmpty()) {
+                // Fallback matched
+                recommended.add("API");
+                recommended.add("BACKEND");
+                reasonBuilder.append("업로드된 문서 명세서 검토 후, 범용 검증을 위한 API 및 BACKEND 관점을 기본 추천합니다.");
+            } else {
+                reasonBuilder.append("기획서 내 ")
+                        .append(String.join(", ", matched))
+                        .append(" 관련 키워드가 감지되어 맞춤 관점(")
+                        .append(String.join(", ", recommended))
+                        .append(")을 추천합니다.");
+            }
+        }
+
+        return QaRecommendationResponse.builder()
+                .recommendedPerspectives(new ArrayList<>(recommended))
+                .reason(reasonBuilder.toString())
+                .build();
     }
 }

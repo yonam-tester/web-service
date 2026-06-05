@@ -223,15 +223,17 @@ public class AnalysisResultResponse {
         private String sourceName;
         private String sourceSection;
         private String confidenceLevel;
+        private Double score;
 
         public EvidenceDto() {}
 
-        public EvidenceDto(String evidenceId, String evidenceText, String sourceName, String sourceSection, String confidenceLevel) {
+        public EvidenceDto(String evidenceId, String evidenceText, String sourceName, String sourceSection, String confidenceLevel, Double score) {
             this.evidenceId = evidenceId;
             this.evidenceText = evidenceText;
             this.sourceName = sourceName;
             this.sourceSection = sourceSection;
             this.confidenceLevel = confidenceLevel;
+            this.score = score;
         }
 
         public String getEvidenceId() { return evidenceId; }
@@ -249,6 +251,9 @@ public class AnalysisResultResponse {
         public String getConfidenceLevel() { return confidenceLevel; }
         public void setConfidenceLevel(String confidenceLevel) { this.confidenceLevel = confidenceLevel; }
 
+        public Double getScore() { return score; }
+        public void setScore(Double score) { this.score = score; }
+
         public static EvidenceDtoBuilder builder() {
             return new EvidenceDtoBuilder();
         }
@@ -259,6 +264,7 @@ public class AnalysisResultResponse {
             private String sourceName;
             private String sourceSection;
             private String confidenceLevel;
+            private Double score;
 
             public EvidenceDtoBuilder evidenceId(String evidenceId) {
                 this.evidenceId = evidenceId;
@@ -285,8 +291,13 @@ public class AnalysisResultResponse {
                 return this;
             }
 
+            public EvidenceDtoBuilder score(Double score) {
+                this.score = score;
+                return this;
+            }
+
             public EvidenceDto build() {
-                return new EvidenceDto(evidenceId, evidenceText, sourceName, sourceSection, confidenceLevel);
+                return new EvidenceDto(evidenceId, evidenceText, sourceName, sourceSection, confidenceLevel, score);
             }
         }
     }

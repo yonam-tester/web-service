@@ -24,6 +24,7 @@ public class CallbackService {
     private final EvidenceRepository evidenceRepository;
     private final PriorityEvaluator priorityEvaluator;
     private final RiskDetector riskDetector;
+    private final FallbackHandler fallbackHandler;
 
     public CallbackService(AnalysisJobRepository analysisJobRepository,
                            RequirementRepository requirementRepository,
@@ -31,7 +32,8 @@ public class CallbackService {
                            RiskItemRepository riskItemRepository,
                            EvidenceRepository evidenceRepository,
                            PriorityEvaluator priorityEvaluator,
-                           RiskDetector riskDetector) {
+                           RiskDetector riskDetector,
+                           FallbackHandler fallbackHandler) {
         this.analysisJobRepository = analysisJobRepository;
         this.requirementRepository = requirementRepository;
         this.testCaseRepository = testCaseRepository;
@@ -39,6 +41,7 @@ public class CallbackService {
         this.evidenceRepository = evidenceRepository;
         this.priorityEvaluator = priorityEvaluator;
         this.riskDetector = riskDetector;
+        this.fallbackHandler = fallbackHandler;
     }
 
     /**
@@ -148,13 +151,19 @@ public class CallbackService {
 
             // F. Process Evidences with Hallucination Defense check
             if (tcDto.getEvidences() != null) {
-                for (AnalysisCallbackRequest.EvidenceDto evDto : tcDto.getEvidences()) {
-                    // Hallucination Defense Check: verify chunkId and text validity
-                    if (evDto.getChunkId() == null || evDto.getChunkId().startsWith("HALLUCINATED_") || evDto.getEvidenceText() == null || evDto.getEvidenceText().isBlank()) {
-                        log.error("[HALLUCINATION DETECTED] Invalid or hallucinated chunk received in callback: chunkId={}", evDto.getChunkId());
-                        continue; // skip saving this hallucinated evidence
-                    }
-
+                List<AnalysisCallbackRequest.EvidenceDto> validEvidences = fallbackHandler.filterEvidences(tcDto.getEvidences());
+                
+                // Sort by score descending (null scores treated as 0.0)
+                validEvidences.sort((a, b) -> {
+                    double scoreA = a.getScore() != null ? a.getScore() : 0.0;
+                    double scoreB = b.getScore() != null ? b.getScore() : 0.0;
+                    return Double.compare(scoreB, scoreA); // Descending
+                });
+                
+                // Limit to maximum 3 evidences (Task 8.2 requirement)
+                int limit = Math.min(validEvidences.size(), 3);
+                for (int i = 0; i < limit; i++) {
+                    AnalysisCallbackRequest.EvidenceDto evDto = validEvidences.get(i);
                     Evidence evidence = Evidence.builder()
                             .evidenceId("EVI-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase())
                             .testCase(testCase)
@@ -162,6 +171,7 @@ public class CallbackService {
                             .evidenceText(evDto.getEvidenceText())
                             .sourceName(evDto.getSourceName() != null ? evDto.getSourceName() : "Unknown Source")
                             .sourceSection(evDto.getSourceSection())
+                            .score(evDto.getScore())
                             .build();
 
                     evidenceRepository.save(evidence);

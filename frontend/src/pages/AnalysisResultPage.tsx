@@ -15,6 +15,9 @@ const EvidenceAccordion: React.FC<{ evidence: Evidence }> = ({ evidence }) => {
         <span className="font-semibold text-xs flex items-center gap-1">
           <span className="material-symbols-outlined text-sm">menu_book</span>
           근거: {evidence.sourceName} {evidence.sourceSection && `(${evidence.sourceSection})`}
+          {evidence.score !== undefined && evidence.score !== null && (
+            <span className="ml-2 text-[10px] text-amber-500 font-mono">({Math.round(evidence.score * 100)}% 유사도)</span>
+          )}
         </span>
         <span className="material-symbols-outlined transition-transform duration-200" style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>
           expand_more
@@ -67,6 +70,8 @@ const ContentAccordion: React.FC<{ title: string; content: string; icon: string;
 
 // Subcomponent: TestCaseCard
 const TestCaseCard: React.FC<{ testCase: TestCase; isSelected: boolean; onToggle: () => void }> = ({ testCase, isSelected, onToggle }) => {
+  const hasInsufficientEvidence = !testCase.evidences || testCase.evidences.length === 0 || testCase.evidences.every(ev => ev.score !== undefined && ev.score !== null && ev.score < 0.6);
+
   const getPriorityBadge = (priority: string) => {
     switch (priority.toUpperCase()) {
       case 'HIGH':
@@ -135,7 +140,9 @@ const TestCaseCard: React.FC<{ testCase: TestCase; isSelected: boolean; onToggle
       className={`glass-panel p-md rounded-xl hover:bg-white/5 transition-all duration-300 flex flex-col gap-md cursor-pointer select-none border ${
         isSelected 
           ? 'border-indigo-500/50 bg-indigo-500/5 shadow-[0_0_15px_rgba(99,102,241,0.1)]' 
-          : testCase.priority === 'HIGH' ? 'border-red-500/20' : 'border-white/5'
+          : hasInsufficientEvidence 
+            ? 'border-amber-500/40 bg-amber-500/5 shadow-[0_0_15px_rgba(245,158,11,0.05)]' 
+            : testCase.priority === 'HIGH' ? 'border-red-500/20' : 'border-white/5'
       }`}
     >
       <div className="flex flex-col gap-sm">
@@ -155,6 +162,13 @@ const TestCaseCard: React.FC<{ testCase: TestCase; isSelected: boolean; onToggle
         </div>
         <h4 className="font-headline-lg-mobile text-on-surface text-base font-bold leading-snug">{testCase.testCaseName}</h4>
         
+        {hasInsufficientEvidence && (
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-500 border border-amber-500/20 w-fit text-[10px] font-semibold select-none">
+            <span className="material-symbols-outlined text-xs">warning</span>
+            근거 부족 (추가 검토 필요)
+          </div>
+        )}
+
         {testCase.riskTags && testCase.riskTags.length > 0 && (
           <div className="flex flex-wrap gap-xs">
             {testCase.riskTags.map((tag) => (

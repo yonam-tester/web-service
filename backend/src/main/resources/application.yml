@@ -37,3 +37,7 @@ aws:
     buckets:
       documents: yeonam-documents
       reports: yeonam-reports
+
+ai:
+  server:
+    url: ${AI_SERVER_URL:http://localhost:8000}

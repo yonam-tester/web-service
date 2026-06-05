@@ -75,6 +75,7 @@ export interface Evidence {
   sourceName: string;
   sourceSection?: string;
   confidenceLevel: string;
+  score?: number;
 }
 
 export interface TestCase {
@@ -154,6 +155,7 @@ export const analysisApi = {
   getResults: (analysisId: string) => api.get<AnalysisResultResponse>(`/analysis/${analysisId}/results`),
   getByProject: (projectId: string) => api.get<AnalysisJobResponse[]>(`/projects/${projectId}/analysis`),
   delete: (analysisId: string) => api.delete(`/analysis/${analysisId}`),
+  getRecommendations: (projectId: string) => api.get<QaRecommendationResponse>(`/projects/${projectId}/qa-recommendations`),
 };
 
 export const reportApi = {

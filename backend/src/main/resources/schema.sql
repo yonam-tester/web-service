@@ -92,6 +92,7 @@ CREATE TABLE evidence (
     evidence_text TEXT NOT NULL,
     source_name VARCHAR(255) NOT NULL,
     source_section VARCHAR(255),
+    score DOUBLE,
     CONSTRAINT fk_evidence_tc FOREIGN KEY (test_case_id) REFERENCES test_case(test_case_id) ON DELETE CASCADE
 );
 CREATE INDEX idx_evidence_tc ON evidence(test_case_id);

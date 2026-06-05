@@ -1,6 +1,7 @@
 package com.yeonam.tester.dto;
 
 import java.util.List;
+import com.fasterxml.jackson.annotation.JsonAlias;
 
 public class AnalysisCallbackRequest {
     private String summary;
@@ -50,6 +51,7 @@ public class AnalysisCallbackRequest {
         private String priority;
         private String confidenceLevel;
         private List<String> riskTags;
+        @JsonAlias({"evidences", "evidence_list"})
         private List<EvidenceDto> evidences;
         private String category;
         private String technique;
@@ -234,10 +236,15 @@ public class AnalysisCallbackRequest {
     }
 
     public static class EvidenceDto {
+        @JsonAlias({"chunkId", "chunk_id"})
         private String chunkId;
+        @JsonAlias({"evidenceText", "evidence_text", "text"})
         private String evidenceText;
+        @JsonAlias({"sourceName", "source_name"})
         private String sourceName;
+        @JsonAlias({"sourceSection", "source_section"})
         private String sourceSection;
+        private Double score;
 
         public EvidenceDto() {}
 
@@ -247,6 +254,17 @@ public class AnalysisCallbackRequest {
             this.sourceName = sourceName;
             this.sourceSection = sourceSection;
         }
+
+        public EvidenceDto(String chunkId, String evidenceText, String sourceName, String sourceSection, Double score) {
+            this.chunkId = chunkId;
+            this.evidenceText = evidenceText;
+            this.sourceName = sourceName;
+            this.sourceSection = sourceSection;
+            this.score = score;
+        }
+
+        public Double getScore() { return score; }
+        public void setScore(Double score) { this.score = score; }
 
         public String getChunkId() { return chunkId; }
         public void setChunkId(String chunkId) { this.chunkId = chunkId; }

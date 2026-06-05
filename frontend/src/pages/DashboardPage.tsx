@@ -726,7 +726,7 @@ export const DashboardPage: React.FC = () => {
               <div>
                 <h4 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface mb-2">문서 삭제 경고</h4>
                 <p className="text-on-surface-variant font-body-sm text-body-sm leading-relaxed text-slate-300">
-                  이 문서를 삭제하면 연결된 모든 <span className="text-error font-bold underline">분석 작업, 테스트 케이스, 위험 요소 태그 및 물리 보고서 파일</span>이 영구적으로 소멸됩니다. 정말 삭제하시겠습니까?
+                  이 문서를 삭제하면 연결된 모든 <span className="text-error font-bold underline">분석 작업, 테스트 케이스, 위험 요소 태그, 물리 보고서 파일 및 연결된 Vector DB 내의 모든 텍스트 청크 및 임베딩 데이터</span>가 영구적으로 소멸됩니다. 정말 삭제하시겠습니까?
                 </p>
                 <p className="text-xs text-slate-400 mt-2 font-mono">파일명: {docToDelete.fileName}</p>
               </div>
@@ -772,7 +772,7 @@ export const DashboardPage: React.FC = () => {
               <div>
                 <h4 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface mb-2">프로젝트 영구 폐기 경고</h4>
                 <p className="text-on-surface-variant font-body-sm text-body-sm leading-relaxed text-slate-300">
-                  이 프로젝트를 삭제하면 프로젝트 데이터와 <span className="text-error font-bold underline">모든 연동 파일, RDB 분석 데이터, 테스트케이스, 그리고 S3 보고서 물리 파일</span>이 데이터베이스 외래키 캐스케이드에 의해 완벽히 연쇄 영구 소멸됩니다.
+                  이 프로젝트를 삭제하면 프로젝트 데이터와 <span className="text-error font-bold underline">모든 연동 파일, RDB 분석 데이터, 테스트케이스, S3 보고서 물리 파일, 그리고 연결된 Vector DB 내의 모든 텍스트 청크 및 임베딩 데이터</span>가 데이터베이스 외래키 캐스케이드에 의해 완벽히 연쇄 영구 소멸됩니다.
                 </p>
                 <p className="text-xs text-red-300 mt-2 font-mono">프로젝트명: {projToDelete.projectName}</p>
               </div>

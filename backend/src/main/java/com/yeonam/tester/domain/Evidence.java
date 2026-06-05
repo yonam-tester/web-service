@@ -26,15 +26,19 @@ public class Evidence {
     @Column(name = "source_section")
     private String sourceSection;
 
+    @Column(name = "score")
+    private Double score;
+
     public Evidence() {}
 
-    public Evidence(String evidenceId, TestCase testCase, String chunkId, String evidenceText, String sourceName, String sourceSection) {
+    public Evidence(String evidenceId, TestCase testCase, String chunkId, String evidenceText, String sourceName, String sourceSection, Double score) {
         this.evidenceId = evidenceId;
         this.testCase = testCase;
         this.chunkId = chunkId;
         this.evidenceText = evidenceText;
         this.sourceName = sourceName;
         this.sourceSection = sourceSection;
+        this.score = score;
     }
 
     public String getEvidenceId() { return evidenceId; }
@@ -55,6 +59,9 @@ public class Evidence {
     public String getSourceSection() { return sourceSection; }
     public void setSourceSection(String sourceSection) { this.sourceSection = sourceSection; }
 
+    public Double getScore() { return score; }
+    public void setScore(Double score) { this.score = score; }
+
     public static EvidenceBuilder builder() {
         return new EvidenceBuilder();
     }
@@ -66,6 +73,7 @@ public class Evidence {
         private String evidenceText;
         private String sourceName;
         private String sourceSection;
+        private Double score;
 
         public EvidenceBuilder evidenceId(String evidenceId) {
             this.evidenceId = evidenceId;
@@ -97,8 +105,13 @@ public class Evidence {
             return this;
         }
 
+        public EvidenceBuilder score(Double score) {
+            this.score = score;
+            return this;
+        }
+
         public Evidence build() {
-            return new Evidence(evidenceId, testCase, chunkId, evidenceText, sourceName, sourceSection);
+            return new Evidence(evidenceId, testCase, chunkId, evidenceText, sourceName, sourceSection, score);
         }
     }
 }

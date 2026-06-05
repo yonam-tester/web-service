@@ -18,6 +18,7 @@ export const DocumentUploadPage: React.FC = () => {
   const [selectedPerspectives, setSelectedPerspectives] = useState<string[]>([]);
   const [customPrompt, setCustomPrompt] = useState('');
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
+  const [recommendationReason, setRecommendationReason] = useState('');
 
   useEffect(() => {
     const doneFiles = files.filter(f => f.status === 'DONE').map(f => f.documentId);
@@ -89,10 +90,24 @@ export const DocumentUploadPage: React.FC = () => {
     };
   }, [files, projectId]);
 
+  const fetchRecommendations = async (pId: string) => {
+    try {
+      const response = await analysisApi.getRecommendations(pId);
+      if (response.data) {
+        setSelectedPerspectives(response.data.recommendedPerspectives || []);
+        setRecommendationReason(response.data.reason || '');
+      }
+    } catch (err) {
+      console.error("Failed to fetch QA recommendations", err);
+    }
+  };
+
   const fetchProjectFiles = async (pId: string) => {
     try {
       const response = await fileApi.getByProject(pId);
       setFiles(response.data);
+      // Fetch recommendations on file list updates
+      fetchRecommendations(pId);
     } catch (err) {
       console.error(err);
     }
@@ -507,6 +522,14 @@ export const DocumentUploadPage: React.FC = () => {
                 <span className="material-symbols-outlined text-tertiary">psychology</span>
                 <h2 className="font-headline-lg-mobile text-headline-lg-mobile font-semibold text-white">QA 분석 관점 설정</h2>
               </div>
+
+              {recommendationReason && (
+                <div className="p-3 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs leading-relaxed animate-fade-in flex items-start gap-2">
+                  <span className="material-symbols-outlined text-sm shrink-0 mt-0.5">info</span>
+                  <span>{recommendationReason}</span>
+                </div>
+              )}
+
 
 
 

@@ -12,6 +12,11 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.*;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
@@ -36,6 +41,11 @@ public class FileService {
     @Value("${aws.s3.buckets.reports}")
     private String reportsBucket;
 
+    @Value("${ai.server.url:http://localhost:8000}")
+    private String aiServerUrl;
+
+    private final HttpClient httpClient;
+
     private static final long MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
     private static final List<String> ALLOWED_EXTENSIONS = Arrays.asList("pdf", "md", "txt", "docx");
 
@@ -59,6 +69,9 @@ public class FileService {
         this.riskItemRepository = riskItemRepository;
         this.evidenceRepository = evidenceRepository;
         this.filePreprocessingService = filePreprocessingService;
+        this.httpClient = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(3))
+                .build();
     }
 
     /**
@@ -255,6 +268,9 @@ public class FileService {
 
         // 7. UploadedFile 삭제
         fileRepository.delete(uploadedFile);
+
+        // 8. RAG Vector DB 연쇄 삭제
+        deleteVectorsFromRagServer(fileId);
     }
 
     private void triggerAsyncPreprocessing(final String fileId) {
@@ -279,5 +295,35 @@ public class FileService {
     public UploadedFile getFileById(String fileId) {
         return fileRepository.findById(fileId)
                 .orElseThrow(() -> new IllegalArgumentException("File not found: " + fileId));
+    }
+
+    /**
+     * Asynchronously requests the RAG server to delete vectors associated with the fileId.
+     */
+    public void deleteVectorsFromRagServer(String fileId) {
+        String targetUrl = aiServerUrl + "/api/vectors/" + fileId;
+        System.out.println("Sending async DELETE request to RAG server: " + targetUrl);
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(targetUrl))
+                    .DELETE()
+                    .timeout(Duration.ofSeconds(3))
+                    .build();
+
+            httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                    .thenAccept(response -> {
+                        if (response.statusCode() == 200) {
+                            System.out.println("Successfully deleted vectors from RAG server for fileId: " + fileId);
+                        } else {
+                            System.err.println("RAG server returned error status for vector deletion: " + response.statusCode());
+                        }
+                    })
+                    .exceptionally(ex -> {
+                        System.err.println("Failed to contact RAG server for vector deletion: " + ex.getMessage());
+                        return null;
+                    });
+        } catch (Exception e) {
+            System.err.println("Exception building delete request for RAG server: " + e.getMessage());
+        }
     }
 }

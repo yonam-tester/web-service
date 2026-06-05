@@ -97,6 +97,19 @@ public class AnalysisController {
         }
     }
 
+    @GetMapping("/api/projects/{projectId}/qa-recommendations")
+    public ResponseEntity<?> getQaRecommendations(@PathVariable String projectId) {
+        try {
+            QaRecommendationResponse recommendations = analysisService.getQaRecommendations(projectId);
+            return ResponseEntity.ok(recommendations);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErrorResponse(e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ErrorResponse("Failed to fetch QA recommendations: " + e.getMessage()));
+        }
+    }
+
     private static class ErrorResponse {
         private final String message;
         public ErrorResponse(String message) {
