@@ -274,7 +274,7 @@ export const DocumentUploadPage: React.FC = () => {
           navigate(`/analysis-demo?analysisId=${anlId}`);
         } else if (response.data.status === 'FAILED') {
           clearInterval(interval);
-          setError('AI 테스트 시나리오 분리가 실패했습니다. AI 서버 로그를 점검하세요.');
+          setError(response.data.message || 'AI 테스트 시나리오 분리가 실패했습니다.');
           setLoading(false);
         }
       } catch (err) {
@@ -748,6 +748,24 @@ export const DocumentUploadPage: React.FC = () => {
               상태: {analysisMessage}
             </span>
           </div>
+
+          {error && (
+            <div className="flex flex-col gap-3 p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-200 text-sm mt-4 animate-fade-in">
+              <div className="flex items-start gap-3">
+                <span className="material-symbols-outlined text-red-400 shrink-0">error</span>
+                <span className="text-left font-sans">{error}</span>
+              </div>
+              <button
+                onClick={() => {
+                  setError('');
+                  setStep(1);
+                }}
+                className="mt-2 py-1.5 px-4 rounded-lg bg-red-500/20 border border-red-500/30 text-white text-xs font-semibold hover:bg-red-500/30 transition-all self-end"
+              >
+                설정 화면으로 돌아가기
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

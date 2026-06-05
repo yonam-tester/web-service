@@ -9,14 +9,15 @@ Thumbs.db
 desktop.ini
 
 # Python (llm_server, rag_server)
-llm_server/venv/
-llm_server/.env
-llm_server/__pycache__/
-llm_server/*.pyc
+venv/
+.venv/
+__pycache__/
 *.pyc
-rag_server/venv/
-rag_server/.env
-rag_server/__pycache__/
+*.pyo
+*.pyd
+.Python
+env/
+ENV/
 
 # Node / React (frontend)
 frontend/node_modules/
@@ -43,6 +44,11 @@ data/
 *.mv.db
 *.trace.db
 
+# Environment Configurations (Ignore actual secret keys but allow examples)
+.env
+.env.local
+.env.*.local
+!.env.example
+
 # Temporary / Scratch files
 scratch/
-

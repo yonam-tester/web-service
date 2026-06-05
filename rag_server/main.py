@@ -115,7 +115,11 @@ async def process_job(job_data: dict):
         logger.error(f"Error while executing RAG worker for job {analysis_id}: {str(e)}", exc_info=True)
         # Send failure callback to backend
         try:
-            await send_failure_callback(analysis_id, f"RAG 서버 분석 중 예외 발생: {str(e)}")
+            error_msg = f"RAG 서버 분석 중 예외 발생: {str(e)}"
+            # Check if it is an API Key verification failure
+            if "AuthenticationError" in type(e).__name__ or "api key" in str(e).lower() or "api_key" in str(e).lower():
+                error_msg = "API 키 유효성 검증 실패: 유효하지 않은 API 키이거나 만료되었습니다. 키 설정을 재점검해 주세요."
+            await send_failure_callback(analysis_id, error_msg)
         except Exception as err:
             logger.error(f"Failed to send failure callback for job {analysis_id}: {str(err)}")
 

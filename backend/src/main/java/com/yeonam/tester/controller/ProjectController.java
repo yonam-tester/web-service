@@ -3,6 +3,7 @@ package com.yeonam.tester.controller;
 import com.yeonam.tester.dto.ProjectCreateRequest;
 import com.yeonam.tester.dto.ProjectResponse;
 import com.yeonam.tester.service.ProjectService;
+import com.yeonam.tester.service.S3SyncService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -15,9 +16,11 @@ import java.util.List;
 public class ProjectController {
 
     private final ProjectService projectService;
+    private final S3SyncService s3SyncService;
 
-    public ProjectController(ProjectService projectService) {
+    public ProjectController(ProjectService projectService, S3SyncService s3SyncService) {
         this.projectService = projectService;
+        this.s3SyncService = s3SyncService;
     }
 
     @PostMapping
@@ -34,6 +37,7 @@ public class ProjectController {
 
     @GetMapping
     public ResponseEntity<List<ProjectResponse>> getAllProjects() {
+        s3SyncService.syncDatabaseFromS3();
         List<ProjectResponse> projects = projectService.getAllProjects();
         return ResponseEntity.ok(projects);
     }

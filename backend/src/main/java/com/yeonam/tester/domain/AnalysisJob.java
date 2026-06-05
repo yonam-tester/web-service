@@ -26,6 +26,9 @@ public class AnalysisJob {
     @Column(name = "status", nullable = false)
     private String status;
 
+    @Column(name = "missing_items_text", length = 2000)
+    private String missingItemsText;
+
     public AnalysisJob() {}
 
     public AnalysisJob(String analysisId, Project project, String qaPerspective, String customPrompt, String summary, String status) {
@@ -35,6 +38,16 @@ public class AnalysisJob {
         this.customPrompt = customPrompt;
         this.summary = summary;
         this.status = status;
+    }
+
+    public AnalysisJob(String analysisId, Project project, String qaPerspective, String customPrompt, String summary, String status, String missingItemsText) {
+        this.analysisId = analysisId;
+        this.project = project;
+        this.qaPerspective = qaPerspective;
+        this.customPrompt = customPrompt;
+        this.summary = summary;
+        this.status = status;
+        this.missingItemsText = missingItemsText;
     }
 
     public String getAnalysisId() { return analysisId; }
@@ -55,6 +68,9 @@ public class AnalysisJob {
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
 
+    public String getMissingItemsText() { return missingItemsText; }
+    public void setMissingItemsText(String missingItemsText) { this.missingItemsText = missingItemsText; }
+
     public static AnalysisJobBuilder builder() {
         return new AnalysisJobBuilder();
     }
@@ -66,6 +82,7 @@ public class AnalysisJob {
         private String customPrompt;
         private String summary;
         private String status;
+        private String missingItemsText;
 
         public AnalysisJobBuilder analysisId(String analysisId) {
             this.analysisId = analysisId;
@@ -97,8 +114,13 @@ public class AnalysisJob {
             return this;
         }
 
+        public AnalysisJobBuilder missingItemsText(String missingItemsText) {
+            this.missingItemsText = missingItemsText;
+            return this;
+        }
+
         public AnalysisJob build() {
-            return new AnalysisJob(analysisId, project, qaPerspective, customPrompt, summary, status);
+            return new AnalysisJob(analysisId, project, qaPerspective, customPrompt, summary, status, missingItemsText);
         }
     }
 }

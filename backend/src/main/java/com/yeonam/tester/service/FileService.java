@@ -20,6 +20,11 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
+import java.util.Map;
+import java.util.HashMap;
+import java.net.URLEncoder;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 
 @Service
 public class FileService {
@@ -109,6 +114,7 @@ public class FileService {
                     .bucket(documentsBucket)
                     .key(s3Path)
                     .contentType(file.getContentType())
+                    .metadata(createProjectMetadata(project))
                     .build();
 
             s3Client.putObject(putOb, RequestBody.fromInputStream(file.getInputStream(), file.getSize()));
@@ -150,6 +156,7 @@ public class FileService {
                     .bucket(documentsBucket)
                     .key(s3Path)
                     .contentType("text/markdown")
+                    .metadata(createProjectMetadata(project))
                     .build();
 
             s3Client.putObject(putOb, RequestBody.fromBytes(bytes));
@@ -169,6 +176,23 @@ public class FileService {
         UploadedFile saved = fileRepository.save(uploadedFile);
         triggerAsyncPreprocessing(saved.getFileId());
         return saved;
+    }
+
+    private Map<String, String> createProjectMetadata(Project project) {
+        Map<String, String> metadata = new HashMap<>();
+        try {
+            metadata.put("project-id", project.getProjectId());
+            metadata.put("project-name", URLEncoder.encode(project.getName(), StandardCharsets.UTF_8.toString()));
+            metadata.put("project-description", project.getDescription() != null ? URLEncoder.encode(project.getDescription(), StandardCharsets.UTF_8.toString()) : "");
+            metadata.put("project-github-url", project.getGithubUrl() != null ? project.getGithubUrl() : "");
+            metadata.put("project-github-branch", project.getGithubBranch() != null ? project.getGithubBranch() : "");
+            metadata.put("project-integration-status", project.getIntegrationStatus() != null ? project.getIntegrationStatus() : "NONE");
+            metadata.put("project-created-at", project.getCreatedAt() != null ? project.getCreatedAt().toString() : java.time.LocalDateTime.now().toString());
+        } catch (Exception e) {
+            metadata.put("project-id", project.getProjectId());
+            metadata.put("project-name", project.getProjectId());
+        }
+        return metadata;
     }
 
     /**

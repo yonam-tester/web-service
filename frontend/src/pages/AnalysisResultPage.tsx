@@ -405,8 +405,9 @@ export const AnalysisResultPage: React.FC = () => {
           </section>
 
           {/* 3. Test Case Results Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-gutter items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
             {/* Left Column: Test Cases list */}
+            <div className="lg:col-span-2 space-y-4">
               <div className="flex justify-between items-center pb-2">
                 <h3 className="font-bold text-white text-base flex items-center gap-2">
                   <span className="material-symbols-outlined text-indigo-400">checklist</span>
@@ -430,7 +431,7 @@ export const AnalysisResultPage: React.FC = () => {
                   </label>
                 )}
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {testCases.map((tc) => (
                   <TestCaseCard 
                     key={tc.testCaseId} 
@@ -446,9 +447,10 @@ export const AnalysisResultPage: React.FC = () => {
                   />
                 ))}
               </div>
+            </div>
 
             {/* Right Column: Missing Items warnings */}
-            <div className="space-y-6">
+            <div className="lg:col-span-1 space-y-6">
               <div className="glass-panel p-md rounded-xl border border-orange-500/20 bg-orange-500/5 space-y-4">
                 <h4 className="font-bold text-orange-400 text-sm flex items-center gap-2">
                   <span className="material-symbols-outlined">warning</span>

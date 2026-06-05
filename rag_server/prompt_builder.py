@@ -187,6 +187,9 @@ async def call_llm_with_key(prompt: str, llm_api_key: Optional[str] = None) -> L
                     
             return test_cases
             
+    except litellm.exceptions.AuthenticationError as e:
+        logger.error(f"LiteLLM AuthenticationError caught: {str(e)}")
+        raise e
     except Exception as e:
         logger.error(f"Failed to generate test cases via LLM: {str(e)}. Falling back to mock data.", exc_info=True)
         

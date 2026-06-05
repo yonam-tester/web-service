@@ -10,7 +10,8 @@
 각 서브 모듈의 설계 구조, 상세 API 목록, 모듈별 구동 가이드는 아래 개별 문서를 참고하시면 편리합니다:
 - **[☕ 백엔드 모듈 상세 가이드 (Spring Boot)](file:///c:/capd/yeonam_tester/backend/README.md)**
 - **[🎨 프론트엔드 모듈 상세 가이드 (React)](file:///c:/capd/yeonam_tester/frontend/README.md)**
-- **[🐍 AI 분석 서버 상세 가이드 (FastAPI)](file:///c:/capd/yeonam_tester/llm_server/README.md)**
+- **[🐍 AI 분석 서버 상세 가이드 (FastAPI llm_server)](file:///c:/capd/yeonam_tester/llm_server/README.md)**
+- **[🐍 RAG 분석 서버 상세 가이드 (FastAPI rag_server)](file:///c:/capd/yeonam_tester/rag_server/README.md)**
 
 ---
 
@@ -21,7 +22,7 @@
 ```mermaid
 graph TD
     UI[React Frontend: 5173] <-->|REST API / Event Polling| BE[Spring Boot Backend: 8080]
-    BE <-->|Async trigger / Webhook Callback| AI[FastAPI llm_server: 8000]
+    BE <-->|Async trigger / Webhook Callback| AI[FastAPI rag_server / llm_server]
     BE <-->|Metadata Persistence| DB[(H2 File DB)]
     BE <-->|S3 File Sync| S3[(MinIO Object Storage: 9000)]
     AI <-->|Document Parsing| S3
@@ -36,9 +37,9 @@ graph TD
 - **기술 스택:** Java 17+, Spring Boot 3.3.0, Spring Data JPA, Hibernate, AWS Java SDK S3
 - **주요 기능:** REST API 엔드포인트 제어, H2 데이터베이스 트랜잭션, AWS S3 API를 이용한 로컬 MinIO 문서 업로드/다운로드, 비동기 AI 분석 파이프라인 트리거 및 비결합형 웹훅 처리.
 
-### 3. AI 분석 서버 (FastAPI)
-- **기술 스택:** Python 3.10+, FastAPI, Uvicorn, LiteLLM, pypdf, python-docx
-- **주요 기능:** 비동기 `asyncio.Queue` 기반 분석 대기열(202 Accepted 반환), S3 연계 텍스트 파싱 및 추출, OpenAI/Anthropic 표준 호출 게이트웨이, JSON 보정 및 웹훅 전송.
+### 3. AI 및 RAG 분석 서버 (FastAPI)
+- **기술 스택:** Python 3.10+, FastAPI, Uvicorn, LiteLLM, pypdf, python-docx, FAISS
+- **주요 기능:** 비동기 `asyncio.Queue` 기반 분석 대기열(202 Accepted 반환), S3 연계 텍스트 파싱 및 분할, 로컬 FAISS 인덱싱 및 시맨틱/키워드 하이브리드 검색, OpenAI/Anthropic 표준 호출 게이트웨이, JSON 보정 및 웹훅 전송.
 
 ### 4. 저장소 계층
 - **H2 Database (RDB):** 로컬 파일 모드(`jdbc:h2:file:./data/yeonam_db`). 프로젝트 메타데이터, 파일 이력, 분석 작업 진행률 및 테스트 케이스 결과 저장.
@@ -64,10 +65,11 @@ docker-compose up -d
 
 ---
 
-### Step 2. AI 분석 서버 (FastAPI) 실행
-1. `llm_server/` 폴더로 이동하여 Python 가상환경을 생성하고 구동합니다.
+### Step 2. AI / RAG 분석 서버 실행 (FastAPI)
+`rag_server`를 예시로 가동합니다.
+1. `rag_server/` 폴더로 이동하여 Python 가상환경을 생성하고 구동합니다.
    ```bash
-   cd llm_server
+   cd rag_server
    python -m venv venv
    
    # Windows PowerShell의 경우
@@ -79,13 +81,14 @@ docker-compose up -d
    ```bash
    pip install -r requirements.txt
    ```
-3. 로컬 테스트 및 API 비용 절약을 위해 기본적으로 **Mock LLM 모드**로 작동합니다. 실제 OpenAI API를 연동하려면 `.env` 파일을 다음과 같이 구성하세요.
+3. 로컬 테스트 및 API 비용 절약을 위해 기본적으로 **Mock 모드**로 작동합니다. 실제 OpenAI API를 연동하려면 `.env` 파일을 다음과 같이 구성하세요.
    ```env
+   MOCK_RAG=false
    MOCK_LLM=false
    LLM_MODEL=gpt-4o-mini
    OPENAI_API_KEY=your_actual_openai_api_key
    ```
-4. Uvicorn 개발 서버를 시작합니다 (8000번 포트).
+4. Uvicorn 개발 서버를 시작합니다.
    ```bash
    uvicorn main:app --host 0.0.0.0 --port 8000 --reload
    ```
@@ -111,7 +114,7 @@ docker-compose up -d
 1. `frontend/` 폴더로 이동하여 의존성 라이브러리를 설치합니다.
    ```bash
    cd frontend
-   optional npm install
+   npm install
    ```
 2. Vite 개발 서버를 기동합니다.
    ```bash
@@ -121,44 +124,71 @@ docker-compose up -d
 
 ---
 
-## ✨ 연암 테스터 핵심 기능 스펙
+## 🔄 RAG_Server와 LLM_Server의 교체 방법
 
-1. **프로젝트 연동 및 README 수집:** 
-   GitHub Public 리포지토리 URL을 통해 연결 유무를 실시간 검증하고, 연동 완료 시 기본 브랜치의 `README.md`를 자동 수집하여 전처리 문서 대상으로 즉각 등록합니다.
-2. **문서 업로드 및 이중 유효성 검증:** 
-   PDF, TXT, MD, DOCX 확장자 검사 및 20MB 이하의 용량 제한 필터를 프론트엔드와 백엔드에서 이중으로 엄격하게 검증하여 비적합 파일 업로드를 사전에 완벽 차단합니다.
-3. **맞춤형 QA 추천 관점 및 커스프트 프롬프트:** 
-   업로드된 문서 명칭에 알맞은 맞춤형 키워드 칩(#입력값_검증, #API_보안 등)을 추천하고, 사용자의 상세 통제 지시 프롬프트를 취합해 분석 파라미터로 적재합니다.
-4. **비동기 상태 모니터링 폴링:** 
-   분석 실행 시 UI에서 2초 주기로 백엔드를 폴링하여 진행률과 메시지가 동적 스텝퍼(문서 파싱 -> 지식베이스 검색 -> 테스트 케이스 생성 -> 무결성 검증)에 맵핑되도록 실시간 피드백을 제공합니다.
-5. **테스트 시나리오 카드화 및 시각적 강조:** 
-   AI 결과로 분리된 요약 카드, 테스트 카드 목록, 우선순위 배지, 위험 해시태그를 출력합니다. 300자 초과 텍스트 영역은 말줄임 후 클릭 시 확장되는 아코디언 컴포넌트로 정돈되어 제공됩니다.
-6. **검증 보고서 렌더링 및 무중단 자동 복구 (Fallback):** 
-   Markdown/PDF 형태로 최종 결과 보고서를 조립하고, 하단에 시스템 Disclaimer(한계 고지)를 병합해 반출합니다. 만약 S3 스토리지의 실물 보고서가 임의로 손상/유실되더라도 500 에러를 반환하지 않고 RDB 메타데이터 기반으로 온더플라이로 재생성하여 무중단 다운로드되도록 보장합니다.
-7. **3중 연쇄 완전 파기:** 
-   문서 및 프로젝트 삭제 시 관계형 DB(RDB)에 매핑된 데이터뿐만 아니라 S3 스토리지에 존재하는 원본 및 보고서 실물 파일까지 동기식으로 일괄 연쇄 삭제하여 저장 공간 누수를 완벽 차단합니다.
-8. **샌드박스 오프라인 데모 스위치 지원:**
-   화면 상의 `샌드박스 데모 모드 (오프라인)` 스위치를 켜면 AI 서버 기동 없이도 8초 후 자동 가상 결과를 도출해주며, 이를 끄면 실물 AI 서버와 완전히 실시간 통신하게 됩니다.
+연암 테스터는 상황에 따라 단순 AI 추론만을 지원하는 **LLM_Server** 또는 기획 문서 기반 시맨틱 검색 검색증강생성(RAG)이 특화된 **RAG_Server**를 유연하게 교체하여 사용할 수 있도록 느슨하게 결합된 아키텍처를 지니고 있습니다.
+
+### 방법 1. 동일한 포트(8000)를 통한 스왑 교체 (가장 추천)
+기본적으로 `llm_server`와 `rag_server`는 모두 **8000번 포트**를 사용하도록 설계되어 있습니다.
+1. 현재 구동 중인 AI 서버의 터미널에서 구동을 중지(`Ctrl + C`)합니다.
+2. 교체하고자 하는 다른 AI 서버 폴더로 이동하여 해당 서버를 8000번 포트로 가동합니다:
+   ```bash
+   # 예: llm_server에서 rag_server로 교체하는 경우
+   cd rag_server
+   .\venv\Scripts\activate
+   uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+   ```
+3. 백엔드(Spring Boot)는 계속 동일하게 `http://localhost:8000`을 바라보기 때문에, 백엔드 서버를 재기동할 필요 없이 즉시 교체된 AI 엔진을 사용합니다.
+
+### 방법 2. 다른 포트로 각각 실행 후 백엔드 설정 변경 교체
+두 서버를 동시에 각각 다른 포트에 띄워두고 백엔드의 연동 대상을 환경 설정으로 손쉽게 스왑할 수 있습니다.
+1. `LLM_Server`와 `RAG_Server`를 서로 다른 포트로 동시에 구동합니다:
+   - **LLM_Server**: 8000번 포트로 구동 (`uvicorn main:app --port 8000`)
+   - **RAG_Server**: 8001번 포트로 구동 (`uvicorn main:app --port 8001`)
+2. Spring Boot 백엔드가 바라보는 AI 서버 엔드포인트(`AI_SERVER_URL`)를 환경 변수나 설정 파일을 통해 교체한 뒤 백엔드를 실행합니다:
+   - **방법 A: 환경변수로 제어하기**
+     - **Windows PowerShell**:
+       ```powershell
+       $env:AI_SERVER_URL="http://localhost:8001"
+       .maven\apache-maven-3.9.6\bin\mvn.cmd spring-boot:run
+       ```
+     - **Windows CMD**:
+       ```cmd
+       set AI_SERVER_URL=http://localhost:8001
+       .maven\apache-maven-3.9.6\bin\mvn.cmd spring-boot:run
+       ```
+     - **Linux / macOS**:
+       ```bash
+       export AI_SERVER_URL=http://localhost:8001
+       mvn spring-boot:run
+       ```
+   - **방법 B: 설정 파일(.env 또는 application.yml)로 제어하기**
+     - `backend/` 하위의 `.env` 파일 내에 `AI_SERVER_URL=http://localhost:8001`을 기입한 후 구동합니다.
+     - 혹은 `backend/src/main/resources/application.yml`의 `ai.server.url` 프로퍼티를 해당 주소로 수정합니다.
+
+### ⚠️ AI 서버 교체 시 주의사항 (웹훅 콜백 설정)
+- AI 분석 서버들이 작업 완료 후 백엔드로 결과를 회신할 때, 각 AI 서버의 환경 변수인 `BACKEND_URL`을 참조합니다.
+- 교체하여 사용하는 모든 AI 서버(`llm_server` 및 `rag_server`)의 `.env` 내에 `BACKEND_URL`이 실제 Spring Boot 백엔드 서버 주소(기본값: `http://localhost:8080`)와 완벽히 일치하게 선언되어 있는지 반드시 확인해 주세요.
 
 ---
 
-## 🛠️ 최근 추가 개선 및 확장 스펙 (Phase 6)
+## 🛠️ 최근 추가 개선 및 확장 스펙 (Phase 5)
 
-프로젝트 고도화 및 안정적이고 보안성 높은 협업 환경 구축을 위해 최근 추가된 4대 핵심 개선 내역입니다:
+연암 테스터 서비스의 고도화, 안정성 확보, 보안 및 무중단 데이터 복원 기능 강화를 위해 최근 추가 완료된 핵심 개선 내역입니다:
 
-### 1. 사용자 지정 LLM API Key 보안 파이프라인
-* **개념**: 서버 비용 절감 및 개별 보안을 위해 브라우저에서 입력한 LLM API Key를 동적으로 AI 서버(FastAPI) 추론 엔진까지 주입하는 흐름을 완비했습니다.
-* **보안 강화**: `<input type="password" />` 마스킹, 클립보드 복사 방지(`onCopy` 차단), `localStorage` 로컬 캐싱 방식을 사용하여 안전하게 키를 보존하며 분석 기동 시 DTO 파라미터(`llmApiKey`)를 통해 동적으로 송출됩니다. 키가 제공되지 않을 시 서버 환경 변수를 통한 폴백 추론이 연계됩니다.
+### 1. MinIO(S3) 물리 파일 기반 RDB 자동 동기화 및 메타데이터 복원
+* **개념:** 로컬 테스트나 서버 리셋으로 백엔드 H2 DB 데이터가 휘발되더라도, S3(MinIO) 스토리지에 기적재된 물리 파일 데이터를 파싱하여 대시보드 상태를 즉각 동기식 복구합니다.
+* **프로젝트 상세 복원:** 파일 저장(`PutObject`) 시 프로젝트의 모든 메타데이터(이름, 설명, GitHub URL, 브랜치 등)를 S3 객체의 User Metadata로 안전하게 인코딩하여 영속화합니다. DB 유실 후 대시보드에 접근(`GET /api/projects`)하면 `S3SyncService` 스캐너가 메타데이터를 디코딩하여 임시 명칭이 아닌 **본래의 실제 프로젝트 정보 그대로 완벽 복구**해 냅니다.
 
-### 2. 다중 분석 작업 테스트 케이스 통합 보고서 생성
-* **개념**: 각기 다른 시점에 생성되었거나 다른 프로젝트 문서 분석을 통해 나온 테스트 케이스들을 체크박스로 자유롭게 복수 선택하여 **단일 마크다운 보고서로 안전하게 결합/매핑 및 영속화**할 수 있도록 데이터 구조와 서비스 계층(`ReportAssemblyService`)의 조립 필터를 고도화했습니다.
+### 2. 프론트엔드 중심 API Key 제어 및 비동기 인증 오류 피드백 일원화
+* **개념:** 서버 비용 절감 및 개별 보안을 위해 브라우저의 로컬 스토리지에 입력된 LLM API Key를 동적으로 AI 서버(FastAPI) 추론 엔진까지 안전하게 바인딩하여 전송합니다.
+* **에러 피드백 일원화:** API Key가 만료되었거나 비정상일 경우 RAG 서버에서 `AuthenticationError` 계열의 예외를 명시적으로 캐치하여 실패 사유를 백엔드 콜백으로 전파합니다. 프론트엔드는 폴링을 즉시 중단하고 화면 로딩 모달 하단에 붉은색 경고 박스 피드백과 함께 이전 설정으로 복귀하는 인터랙션 흐름을 지원합니다.
 
-### 3. 화면 가로 너비를 극대화한 UI/UX 개편
-* **개념**: 기존의 고정형 좌측 사이드바 레이아웃 구조를 상단 수평형 탭 네비게이션으로 통폐합했습니다. 본문 사용 너비를 약 25% 이상 늘려 300자 이상의 긴 테스트 카드들과 마크다운 다운로드 미리보기 화면을 쾌적하고 시원한 시각적 뷰포트로 제공합니다.
+### 3. 결과 뷰포트 반응형 가로 2열 그리드 다단화 배치의 안정화
+* **개념:** 기존 세로 일렬 형태의 긴 테스트 케이스 카드 나열 레이아웃을 반응형 2열 다단 그리드 구조(`grid grid-cols-1 md:grid-cols-2 gap-6`)로 개편하여 화면 공간 활용을 극대화했습니다. 해상도가 좁아질 경우 레이아웃 무너짐 없이 모바일 화면에 최적화된 1열로 자동 전환됩니다.
 
-### 4. 분석 명세서 단위 대시보드 리스트 및 트랜잭션 연쇄 파기
-* **개념**: 대시보드 관리 탭을 개별 테스트케이스 나열 방식에서 '분석 명세서(AnalysisJob)' 단위 관리 테이블로 개편했습니다. 
-* **연쇄 파기**: 휴지통 아이콘 클릭 시, 데이터 무결성 손상을 미연에 예방하는 동의 체크 UI 모달(`AnalysisDeleteModal`)이 활성화되며, 삭제 승인 시 RDB 내 매핑된 하위 엔티티들과 S3(MinIO) 스토리지 내 실제 물리 파일 Object까지 일률적으로 소멸시키는 완전 트랜잭션을 실행합니다.
+### 4. 우측 사이드바 패널 실데이터 누락 분석 텍스트 매핑
+* **개념:** 결과 페이지 우측 영역에 하드코딩 더미 목록으로 채워져 있던 '기획 명세서 누락 분석' 영역에 RAG/LLM 분석 엔진이 탐지한 실제 설계 미흡 리스트 데이터를 매핑하여 실시간 동적 렌더링되도록 수정했습니다.
 
 ---
 
@@ -170,12 +200,9 @@ docker-compose up -d
 # 백엔드 모듈 경로로 이동
 cd backend
 
-# 1. 커스텀 API Key 분석 요청 DTO 바인딩 검증
-.maven\apache-maven-3.9.6\bin\mvn.cmd test -Dtest=Phase6ExtensionsTests#testAnalysisTriggerWithCustomApiKey
+# 1. MinIO S3 파일 메타데이터 기반 DB 자동 복구 및 동기화 파이프라인 검증
+.maven\apache-maven-3.9.6\bin\mvn.cmd test -Dtest=S3SyncTests
 
-# 2. 복수 분석 작업 소속 테스트케이스 하나의 보고서 매핑 검증
-.maven\apache-maven-3.9.6\bin\mvn.cmd test -Dtest=Phase6ExtensionsTests#testGenerateReportWithMultiJobTestCases
-
-# 3. 분석 데이터 영구 삭제 시 RDB Cascade 및 S3 삭제 완결성 검증
-.maven\apache-maven-3.9.6\bin\mvn.cmd test -Dtest=Phase6ExtensionsTests#testDeleteAnalysisJobCascades
+# 2. H2 DB 스키마 missing_items_text 칼럼 생성 및 콜백 수집 로직 검증
+.maven\apache-maven-3.9.6\bin\mvn.cmd test -Dtest=AnalysisJobEntityTests
 ```

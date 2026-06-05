@@ -61,9 +61,15 @@ public class CallbackService {
             return;
         }
 
-        // 1. Update Job Summary & Status
+        // 1. Update Job Summary & Status & Missing Items
         job.setSummary(request.getSummary());
         job.setStatus("COMPLETED");
+
+        if (request.getMissingItems() != null && !request.getMissingItems().isEmpty()) {
+            job.setMissingItemsText(String.join(";", request.getMissingItems()));
+        } else {
+            job.setMissingItemsText("");
+        }
         analysisJobRepository.save(job);
 
         if (request.getTestCases() == null || request.getTestCases().isEmpty()) {

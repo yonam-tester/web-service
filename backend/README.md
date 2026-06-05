@@ -27,35 +27,40 @@ backend/
 │   │   │   ├── TesterApplication.java    # 백엔드 애플리케이션 진입점
 │   │   │   ├── controller/               # REST API 컨트롤러
 │   │   │   │   ├── AnalysisController.java
+│   │   │   │   ├── ProjectController.java (S3 동기화 트리거 연동)
 │   │   │   │   ├── ReportController.java
-│   │   │   │   └── TestCaseController.java (신규: 개별 테스트케이스 수정 등)
-│   │   │   ├── domain/                   # JPA Entity 모델 (Report, TestCase, ReportTestCase 등)
+│   │   │   │   └── TestCaseController.java
+│   │   │   ├── domain/                   # JPA Entity 모델 (AnalysisJob, Project, UploadedFile 등)
 │   │   │   ├── dto/                      # API 요청/응답용 Data Transfer Object
 │   │   │   ├── repository/               # Spring Data JPA Repository 인터페이스
 │   │   │   └── service/                  # 비즈니스 로직 처리 레이어
-│   │   │       ├── AnalysisService.java   # 비동기 AI 분석 및 연쇄 삭제 기능
+│   │   │       ├── AnalysisService.java   # 비동기 AI 분석 트리거
 │   │   │       ├── CallbackService.java   # FastAPI 웹훅 수신 및 결과 파싱
-│   │   │       ├── FileService.java       # MinIO(S3) 파일 업로드 및 유효성 검사
+│   │   │       ├── FileService.java       # MinIO(S3) 파일 업로드 및 프로젝트 메타데이터 영속화
 │   │   │       ├── ReportService.java     # 보고서 생성 및 매핑 관리
+│   │   │       ├── S3SyncService.java     # (신규) S3 물리 데이터 기반 DB 복구 스캐너
 │   │   │       └── TestCaseService.java   # 테스트케이스 관리 및 수정 로직
 │   │   └── resources/
 │   │       ├── application.yml           # 데이터베이스, S3, API 주소 등 환경 설정
-│   │       └── schema.sql                # 테이블 정의 및 DDL 스키마 스크립트
+│   │       └── schema.sql                # 테이블 정의 및 DDL 스키마 스크립트 (missing_items_text 칼럼 반영)
 │   └── test/                             # JUnit 통합 테스트 및 기능 검증 테스트
 ```
 
 ---
 
-## 🌟 최근 업데이트 및 확장 스펙
+## 🌟 최근 추가 개선 및 확장 스펙 (Phase 5)
 
-다른 팀원이나 유지보수자가 참고할 수 있는 최근 구현/개선 사항입니다:
+다른 팀원이나 유지보수자가 참고할 수 있는 최근 백엔드 주요 변경 내역입니다:
 
-1. **사용자 입력 LLM API Key 전달**
-   - 사용자가 프론트엔드에서 입력한 LLM API Key(`llmApiKey`)를 백엔드가 수신하여, FastAPI AI 서버의 비동기 분석 요청을 트리거할 때 안전하게 바디 페이로드에 태워 연계합니다.
-2. **다중 분석 작업(AnalysisJob) 테스트케이스 통합 보고서 생성**
-   - 기존에는 동일한 분석 작업에 포함된 테스트케이스만 하나의 보고서로 묶을 수 있었으나, **복수의 서로 다른 분석 작업(AnalysisJob) 소속 테스트케이스들도 하나의 보고서로 합성**할 수 있도록 데이터 구조와 팩토리 로직(`ReportAssemblyService.java`, `ReportService.java`)을 확장했습니다.
-3. **분석 명세서(AnalysisJob) 단위의 완전 연쇄 파기 (Cascading Delete)**
-   - 특정 분석 기록을 삭제할 경우, 관계형 DB에 영속화된 **요구사항(Requirement), 테스트케이스(TestCase), 검증 근거(Evidence), 위험 항목(RiskItem)**뿐만 아니라, **MinIO(S3) 스토리지에 업로드된 물리 보고서 파일까지 일체 동기화되어 영구 소멸**되도록 트랜잭션 안정성을 강화했습니다.
+1. **MinIO S3 메타데이터 기반 DB 자동 복구 및 동기화 (`S3SyncService`)**
+   - 로컬 구동 시 DB 데이터가 휘발되었거나 비어있더라도, `yeonam-documents` 버킷을 스캔하여 S3 상에 잔존하던 프로젝트와 명세 파일들을 데이터베이스에 자동 복원합니다.
+   - 복구 시 단순히 임시 명칭을 쓰는 것이 아니라, `FileService`에서 파일 업로드 시점에 `PutObject` 매개변수로 함께 실어 보낸 **프로젝트의 실제 상세 정보(이름, 설명, GitHub URL, 브랜치 등)**를 S3 객체의 User Metadata에서 읽고 URL 디코딩하여 온전히 보존시킵니다.
+   - 대시보드 진입점인 `GET /api/projects` 엔드포인트 호출 시 동기화 메서드가 자동 트리거되도록 통합하였습니다.
+2. **H2 DB 스키마 확장 및 기획 누락 텍스트 영속화**
+   - RAG 분석을 통해 탐지된 명세서의 요구사항 누락 내용들을 영속적으로 기록하기 위해 `analysis_job` 테이블에 `missing_items_text VARCHAR(2000)` 컬럼을 확장 설계하였습니다.
+   - Callback 수신 시 RAG 서버가 반환해 준 `missingItems` 리스트를 세미콜론 `;` 구분자로 조인하여 테이블에 정상 세이브하고, 결과 조회 시 이를 다시 파싱하여 프론트엔드로 전달합니다.
+3. **보안 API Key 전달 및 비동기 실패 콜백 일원화**
+   - 프론트엔드로부터 주입받은 `llmApiKey`를 유실 없이 FastAPI 서버로 전달하며, RAG 서버 분석 중 API Key 만료 등으로 발생한 비동기 예외를 전달받아 `FAILED` 상태로 변환하고 예외 원인 문구를 `summary` 필드에 안전하게 영속화합니다.
 
 ---
 
@@ -95,14 +100,11 @@ cd backend
 터미널에서 아래 테스트 명령어로 검증이 가능합니다:
 
 ```bash
-# 1. API Key 전달 파이프라인 DTO 정합성 검증
-.maven\apache-maven-3.9.6\bin\mvn.cmd test -Dtest=Phase6ExtensionsTests#testAnalysisTriggerWithCustomApiKey
+# 1. S3 데이터 및 메타데이터 기반 DB 완전 복구 통합 검증
+.maven\apache-maven-3.9.6\bin\mvn.cmd test -Dtest=S3SyncTests
 
-# 2. 다중 분석 작업 출신 테스트케이스 통합 보고서 생성 검증
-.maven\apache-maven-3.9.6\bin\mvn.cmd test -Dtest=Phase6ExtensionsTests#testGenerateReportWithMultiJobTestCases
-
-# 3. 분석 명세서 삭제 시 RDB / S3 연쇄 파기 트랜잭션 검증
-.maven\apache-maven-3.9.6\bin\mvn.cmd test -Dtest=Phase6ExtensionsTests#testDeleteAnalysisJobCascades
+# 2. H2 테이블 확장 DDL 및 비동기 콜백 수집 로직 단위 검증
+.maven\apache-maven-3.9.6\bin\mvn.cmd test -Dtest=AnalysisJobEntityTests
 ```
 
 ---

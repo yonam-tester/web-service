@@ -262,7 +262,7 @@ public class AnalysisService {
             message = "분석 완료.";
         } else if ("FAILED".equals(status)) {
             progress = 0;
-            message = "분석 실패. 로그를 확인하세요.";
+            message = job.getSummary() != null ? job.getSummary() : "분석 실패. 로그를 확인하세요.";
         }
 
         return AnalysisStatusResponse.builder()
@@ -347,10 +347,15 @@ public class AnalysisService {
                     .build();
         }).collect(Collectors.toList());
 
-        List<String> missing = Arrays.asList(
-                "로그인 실패에 따른 세션 차단 임계값(예: 5회 이상 입력 오류 시 계정 잠금)에 대한 예외 흐름 명세가 누락되어 있습니다.",
-                "결제 중 취소/네트워크 단절 상황 발생 시 트랜잭션 복구 흐름 명세 보완이 필요합니다."
-        );
+        List<String> missing = new ArrayList<>();
+        if (job.getMissingItemsText() != null && !job.getMissingItemsText().isBlank()) {
+            String[] split = job.getMissingItemsText().split(";");
+            for (String item : split) {
+                if (!item.trim().isEmpty()) {
+                    missing.add(item.trim());
+                }
+            }
+        }
 
         return AnalysisResultResponse.builder()
                 .analysisId(analysisId)
