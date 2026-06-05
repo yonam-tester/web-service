@@ -34,11 +34,21 @@ public class ReportAssemblyService {
      * Gathers all data related to the analysis job and compiles it into a map model.
      */
     public Map<String, Object> assembleReportData(String analysisId) {
+        return assembleReportData(analysisId, null);
+    }
+
+    public Map<String, Object> assembleReportData(String analysisId, List<String> testCaseIds) {
         AnalysisJob job = analysisJobRepository.findById(analysisId)
                 .orElseThrow(() -> new IllegalArgumentException("Analysis job not found: " + analysisId));
 
         Project project = job.getProject();
-        List<TestCase> testCases = testCaseRepository.findByAnalysisJob_AnalysisId(analysisId);
+        List<TestCase> testCases;
+        if (testCaseIds == null || testCaseIds.isEmpty()) {
+            testCases = testCaseRepository.findByAnalysisJob_AnalysisId(analysisId);
+        } else {
+            testCases = testCaseRepository.findAllById(testCaseIds);
+        }
+        
         List<Requirement> requirements = requirementRepository.findByAnalysisJob_AnalysisId(analysisId);
 
         List<String> tcIds = new ArrayList<>();

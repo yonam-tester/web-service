@@ -1,5 +1,6 @@
 from fastapi import FastAPI, BackgroundTasks, status
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 import logging
@@ -26,6 +27,7 @@ async def process_job(job_data: dict):
     s3_paths = job_data.get("s3Paths", [])
     perspectives = job_data.get("qaPerspectives", [])
     custom_prompt = job_data.get("customPrompt", "")
+    llm_api_key = job_data.get("llmApiKey")
     
     logger.info(f"Worker processing job {analysis_id}")
     
@@ -40,7 +42,7 @@ async def process_job(job_data: dict):
             logger.info("MOCK_LLM is enabled, skipping S3 download/parse.")
             
         # 2. Call LLM (or mock)
-        raw_response = await call_llm(combined_text, perspectives, custom_prompt)
+        raw_response = await call_llm(combined_text, perspectives, custom_prompt, llm_api_key)
         
         # 3. Format and validate
         formatted_data = format_and_validate_result(raw_response)
@@ -68,6 +70,15 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Yeonam Tester MVP AI Server", lifespan=lifespan)
 
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    logger.error(f"Request validation error: {exc.errors()}")
+    logger.error(f"Request body: {await request.body()}")
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"detail": exc.errors(), "body": str(await request.body())}
+    )
+
 from pydantic import BaseModel
 from typing import List, Optional
 
@@ -77,6 +88,31 @@ class TriggerRequest(BaseModel):
     s3Paths: List[str]
     qaPerspectives: Optional[List[str]] = None
     customPrompt: Optional[str] = None
+    llmApiKey: Optional[str] = None
+
+class PreprocessRequest(BaseModel):
+    fileId: str
+    s3Path: str
+
+@app.post("/api/files/preprocess")
+async def preprocess_file_api(req: PreprocessRequest):
+    logger.info(f"Received preprocess request for file: {req.fileId}, path: {req.s3Path}")
+    mock_llm = os.getenv("MOCK_LLM", "true").lower() == "true"
+    
+    if mock_llm:
+        logger.info("MOCK_LLM is enabled, skipping S3 document download validation.")
+        return {"status": "success", "fileId": req.fileId, "valid": True}
+        
+    try:
+        # If not mock, validate if we can parse the document successfully.
+        await process_and_extract([req.s3Path])
+        return {"status": "success", "fileId": req.fileId, "valid": True}
+    except Exception as e:
+        logger.error(f"Failed to parse and extract text for file {req.fileId}: {str(e)}")
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content={"status": "error", "message": f"파싱 오류: {str(e)}"}
+        )
 
 @app.post("/api/analysis/trigger", status_code=status.HTTP_202_ACCEPTED)
 async def trigger_analysis_api(req: TriggerRequest):
@@ -86,7 +122,8 @@ async def trigger_analysis_api(req: TriggerRequest):
         "projectId": req.projectId,
         "s3Paths": req.s3Paths,
         "qaPerspectives": req.qaPerspectives,
-        "customPrompt": req.customPrompt
+        "customPrompt": req.customPrompt,
+        "llmApiKey": req.llmApiKey
     }
     await queue_manager.add_job(job_data)
     return {"message": "Job accepted and queued for analysis."}

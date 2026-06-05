@@ -13,11 +13,11 @@ public interface EvidenceRepository extends JpaRepository<Evidence, String> {
     List<Evidence> findByTestCase_TestCaseId(String testCaseId);
     List<Evidence> findByTestCase_TestCaseIdIn(List<String> testCaseIds);
 
-    @Modifying
+    @Modifying(clearAutomatically = true)
     @Query("DELETE FROM Evidence e WHERE e.testCase.testCaseId IN :testCaseIds")
     void deleteByTestCaseIds(@Param("testCaseIds") List<String> testCaseIds);
 
-    @Modifying
+    @Modifying(clearAutomatically = true)
     @Query("DELETE FROM Evidence e WHERE e.testCase.analysisJob.analysisId IN :analysisIds")
     void deleteByAnalysisIds(@Param("analysisIds") List<String> analysisIds);
 }

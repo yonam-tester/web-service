@@ -42,3 +42,7 @@ backend/*.trace.db
 data/
 *.mv.db
 *.trace.db
+
+# Temporary / Scratch files
+scratch/
+

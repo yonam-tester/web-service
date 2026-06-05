@@ -30,8 +30,43 @@ const EvidenceAccordion: React.FC<{ evidence: Evidence }> = ({ evidence }) => {
   );
 };
 
+// Subcomponent: ContentAccordion for TDD & Negative Scenario
+const ContentAccordion: React.FC<{ title: string; content: string; icon: string; isMonospace?: boolean; iconColor?: string }> = ({ title, content, icon, isMonospace, iconColor }) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div className="mt-2 rounded-lg border border-white/5 bg-black/10 overflow-hidden transition-all duration-300">
+      <div 
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsOpen(!isOpen);
+        }}
+        className="flex items-center justify-between p-3 cursor-pointer text-xs font-semibold text-slate-300 hover:text-white hover:bg-white/5 select-none transition-colors"
+      >
+        <span className="flex items-center gap-1.5">
+          <span className={`material-symbols-outlined text-sm ${iconColor || 'text-indigo-400'}`}>{icon}</span>
+          {title}
+        </span>
+        <span className="material-symbols-outlined transition-transform duration-200" style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+          expand_more
+        </span>
+      </div>
+      
+      <div 
+        className={`transition-all duration-300 ease-in-out overflow-hidden ${
+          isOpen ? 'max-h-[500px] border-t border-white/5 p-3' : 'max-h-0'
+        }`}
+      >
+        <p className={`text-xs leading-relaxed whitespace-pre-wrap ${isMonospace ? 'font-mono text-indigo-300 bg-black/30 p-2 rounded border border-white/5' : 'text-slate-400'}`}>
+          {content}
+        </p>
+      </div>
+    </div>
+  );
+};
+
 // Subcomponent: TestCaseCard
-const TestCaseCard: React.FC<{ testCase: TestCase }> = ({ testCase }) => {
+const TestCaseCard: React.FC<{ testCase: TestCase; isSelected: boolean; onToggle: () => void }> = ({ testCase, isSelected, onToggle }) => {
   const getPriorityBadge = (priority: string) => {
     switch (priority.toUpperCase()) {
       case 'HIGH':
@@ -61,16 +96,64 @@ const TestCaseCard: React.FC<{ testCase: TestCase }> = ({ testCase }) => {
     }
   };
 
+  const getCategoryBadge = (category?: string) => {
+    if (!category) return null;
+    let colorClass = 'bg-slate-500/10 text-slate-400 border-slate-500/20';
+    switch (category.toLowerCase()) {
+      case 'test_level':
+        colorClass = 'bg-blue-500/10 text-blue-400 border-blue-500/20';
+        break;
+      case 'test_technique':
+        colorClass = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+        break;
+      case 'non_functional':
+        colorClass = 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+        break;
+      case 'qa_concept':
+        colorClass = 'bg-purple-500/10 text-purple-400 border-purple-500/20';
+        break;
+    }
+    return (
+      <span className={`text-[10px] px-2 py-0.5 rounded border ${colorClass} font-mono shrink-0`}>
+        {category}
+      </span>
+    );
+  };
+
+  const getTechniqueBadge = (technique?: string) => {
+    if (!technique) return null;
+    return (
+      <span className="bg-indigo-500/10 text-indigo-300 text-[10px] px-2 py-0.5 rounded border border-indigo-500/20 font-sans shrink-0">
+        {technique}
+      </span>
+    );
+  };
+
   return (
-    <div className={`glass-panel p-md rounded-xl hover:bg-white/5 transition-all duration-300 flex flex-col gap-md ${
-      testCase.priority === 'HIGH' ? 'border-red-500/20' : 'border-white/5'
-    }`}>
+    <div 
+      onClick={onToggle}
+      className={`glass-panel p-md rounded-xl hover:bg-white/5 transition-all duration-300 flex flex-col gap-md cursor-pointer select-none border ${
+        isSelected 
+          ? 'border-indigo-500/50 bg-indigo-500/5 shadow-[0_0_15px_rgba(99,102,241,0.1)]' 
+          : testCase.priority === 'HIGH' ? 'border-red-500/20' : 'border-white/5'
+      }`}
+    >
       <div className="flex flex-col gap-sm">
-        <div className="flex justify-between items-center">
-          <span className="font-code-md text-secondary text-xs">{testCase.testCaseId}</span>
+        <div className="flex justify-between items-center flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center gap-3 flex-wrap">
+            <input 
+              type="checkbox"
+              checked={isSelected}
+              onChange={onToggle}
+              className="rounded border-white/20 bg-white/5 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0 w-4 h-4 cursor-pointer"
+            />
+            <span className="font-code-md text-secondary text-xs font-mono">{testCase.testCaseId}</span>
+            {getCategoryBadge(testCase.category)}
+            {getTechniqueBadge(testCase.technique)}
+          </div>
           {getPriorityBadge(testCase.priority)}
         </div>
-        <h4 className="font-headline-lg-mobile text-on-surface text-base font-bold">{testCase.testCaseName}</h4>
+        <h4 className="font-headline-lg-mobile text-on-surface text-base font-bold leading-snug">{testCase.testCaseName}</h4>
         
         {testCase.riskTags && testCase.riskTags.length > 0 && (
           <div className="flex flex-wrap gap-xs">
@@ -104,8 +187,32 @@ const TestCaseCard: React.FC<{ testCase: TestCase }> = ({ testCase }) => {
         </div>
       </div>
 
+      {testCase.tddHint && (
+        <div onClick={(e) => e.stopPropagation()}>
+          <ContentAccordion 
+            title="[💡 TDD 개발 구현 가이드]" 
+            content={testCase.tddHint} 
+            icon="lightbulb" 
+            isMonospace={true} 
+            iconColor="text-yellow-400"
+          />
+        </div>
+      )}
+
+      {testCase.negativeScenario && (
+        <div onClick={(e) => e.stopPropagation()}>
+          <ContentAccordion 
+            title="[⚠️ Happy Path 너머 예외 검증 시나리오]" 
+            content={testCase.negativeScenario} 
+            icon="warning" 
+            isMonospace={false} 
+            iconColor="text-red-400"
+          />
+        </div>
+      )}
+
       {testCase.evidences && testCase.evidences.length > 0 && (
-        <div className="space-y-2 pt-2 border-t border-white/5">
+        <div className="space-y-2 pt-2 border-t border-white/5" onClick={(e) => e.stopPropagation()}>
           {testCase.evidences.map((ev) => (
             <EvidenceAccordion key={ev.evidenceId} evidence={ev} />
           ))}
@@ -123,6 +230,7 @@ export const AnalysisResultPage: React.FC = () => {
 
   const [summary, setSummary] = useState('');
   const [testCases, setTestCases] = useState<TestCase[]>([]);
+  const [selectedTestCaseIds, setSelectedTestCaseIds] = useState<string[]>([]);
   const [missingItems, setMissingItems] = useState<string[]>([]);
   
   const [loading, setLoading] = useState(false);
@@ -147,6 +255,9 @@ export const AnalysisResultPage: React.FC = () => {
       const response = await analysisApi.getResults(id);
       setSummary(response.data.summary);
       setTestCases(response.data.testCases);
+      if (response.data.testCases) {
+        setSelectedTestCaseIds(response.data.testCases.map((tc: TestCase) => tc.testCaseId));
+      }
       setMissingItems(response.data.missingItems || []);
     } catch (err: any) {
       console.error(err);
@@ -159,7 +270,7 @@ export const AnalysisResultPage: React.FC = () => {
   const handleGenerateReport = async () => {
     setReportGenerating(true);
     try {
-      const response = await reportApi.generate(analysisId, reportFormat);
+      const response = await reportApi.generate(analysisId, reportFormat, selectedTestCaseIds);
       setIsReportModalOpen(false);
       
       // Redirect to report preview page
@@ -282,17 +393,45 @@ export const AnalysisResultPage: React.FC = () => {
           {/* 3. Test Case Results Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-gutter items-start">
             {/* Left Column: Test Cases list */}
-            <div className="lg:col-span-2 space-y-4">
-              <h3 className="font-bold text-white text-base flex items-center gap-2">
-                <span className="material-symbols-outlined text-indigo-400">checklist</span>
-                생성된 테스트 케이스 시나리오 ({testCases.length})
-              </h3>
+              <div className="flex justify-between items-center pb-2">
+                <h3 className="font-bold text-white text-base flex items-center gap-2">
+                  <span className="material-symbols-outlined text-indigo-400">checklist</span>
+                  생성된 테스트 케이스 시나리오 ({testCases.length})
+                </h3>
+                {testCases.length > 0 && (
+                  <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer select-none hover:text-white transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={selectedTestCaseIds.length === testCases.length && testCases.length > 0}
+                      onChange={() => {
+                        if (selectedTestCaseIds.length === testCases.length) {
+                          setSelectedTestCaseIds([]);
+                        } else {
+                          setSelectedTestCaseIds(testCases.map(tc => tc.testCaseId));
+                        }
+                      }}
+                      className="rounded border-white/20 bg-white/5 text-indigo-500 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                    />
+                    전체 선택 ({selectedTestCaseIds.length}/{testCases.length})
+                  </label>
+                )}
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {testCases.map((tc) => (
-                  <TestCaseCard key={tc.testCaseId} testCase={tc} />
+                  <TestCaseCard 
+                    key={tc.testCaseId} 
+                    testCase={tc} 
+                    isSelected={selectedTestCaseIds.includes(tc.testCaseId)}
+                    onToggle={() => {
+                      setSelectedTestCaseIds(prev => 
+                        prev.includes(tc.testCaseId) 
+                          ? prev.filter(id => id !== tc.testCaseId) 
+                          : [...prev, tc.testCaseId]
+                      );
+                    }}
+                  />
                 ))}
               </div>
-            </div>
 
             {/* Right Column: Missing Items warnings */}
             <div className="space-y-6">
@@ -337,10 +476,16 @@ export const AnalysisResultPage: React.FC = () => {
       {/* 4. Bottom Actions */}
       <section className="mt-lg flex flex-col md:flex-row gap-md justify-center pt-8 border-t border-white/5">
         <button 
-          onClick={() => setIsReportModalOpen(true)}
+          onClick={() => {
+            if (selectedTestCaseIds.length === 0) {
+              alert('보고서에 수록할 테스트 케이스를 최소 1개 이상 선택해 주세요.');
+              return;
+            }
+            setIsReportModalOpen(true);
+          }}
           className="px-xl py-4 rounded-xl bg-gradient-to-r from-[#6366F1] to-[#8B5CF6] text-white font-bold text-sm glow-indigo hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
         >
-          검증 보고서 생성 및 반출로 이동
+          선택된 테스트 케이스로 보고서 생성
           <span className="material-symbols-outlined text-sm">arrow_forward</span>
         </button>
         <button 

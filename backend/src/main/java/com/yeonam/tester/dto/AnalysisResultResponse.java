@@ -44,10 +44,15 @@ public class AnalysisResultResponse {
         private List<String> riskTags;
         private List<String> relatedRequirements;
         private List<EvidenceDto> evidences;
+        private String category;
+        private String technique;
+        private String tddHint;
+        private String negativeScenario;
+        private String analysisId;
 
         public TestCaseDto() {}
 
-        public TestCaseDto(String testCaseId, String testCaseName, String testScenario, String precondition, List<String> testSteps, String expectedResult, String priority, List<String> riskTags, List<String> relatedRequirements, List<EvidenceDto> evidences) {
+        public TestCaseDto(String testCaseId, String testCaseName, String testScenario, String precondition, List<String> testSteps, String expectedResult, String priority, List<String> riskTags, List<String> relatedRequirements, List<EvidenceDto> evidences, String category, String technique, String tddHint, String negativeScenario, String analysisId) {
             this.testCaseId = testCaseId;
             this.testCaseName = testCaseName;
             this.testScenario = testScenario;
@@ -58,6 +63,11 @@ public class AnalysisResultResponse {
             this.riskTags = riskTags;
             this.relatedRequirements = relatedRequirements;
             this.evidences = evidences;
+            this.category = category;
+            this.technique = technique;
+            this.tddHint = tddHint;
+            this.negativeScenario = negativeScenario;
+            this.analysisId = analysisId;
         }
 
         public String getTestCaseId() { return testCaseId; }
@@ -90,6 +100,21 @@ public class AnalysisResultResponse {
         public List<EvidenceDto> getEvidences() { return evidences; }
         public void setEvidences(List<EvidenceDto> evidences) { this.evidences = evidences; }
 
+        public String getCategory() { return category; }
+        public void setCategory(String category) { this.category = category; }
+
+        public String getTechnique() { return technique; }
+        public void setTechnique(String technique) { this.technique = technique; }
+
+        public String getTddHint() { return tddHint; }
+        public void setTddHint(String tddHint) { this.tddHint = tddHint; }
+
+        public String getNegativeScenario() { return negativeScenario; }
+        public void setNegativeScenario(String negativeScenario) { this.negativeScenario = negativeScenario; }
+
+        public String getAnalysisId() { return analysisId; }
+        public void setAnalysisId(String analysisId) { this.analysisId = analysisId; }
+
         public static TestCaseDtoBuilder builder() {
             return new TestCaseDtoBuilder();
         }
@@ -105,6 +130,11 @@ public class AnalysisResultResponse {
             private List<String> riskTags;
             private List<String> relatedRequirements;
             private List<EvidenceDto> evidences;
+            private String category;
+            private String technique;
+            private String tddHint;
+            private String negativeScenario;
+            private String analysisId;
 
             public TestCaseDtoBuilder testCaseId(String testCaseId) {
                 this.testCaseId = testCaseId;
@@ -156,8 +186,33 @@ public class AnalysisResultResponse {
                 return this;
             }
 
+            public TestCaseDtoBuilder category(String category) {
+                this.category = category;
+                return this;
+            }
+
+            public TestCaseDtoBuilder technique(String technique) {
+                this.technique = technique;
+                return this;
+            }
+
+            public TestCaseDtoBuilder tddHint(String tddHint) {
+                this.tddHint = tddHint;
+                return this;
+            }
+
+            public TestCaseDtoBuilder negativeScenario(String negativeScenario) {
+                this.negativeScenario = negativeScenario;
+                return this;
+            }
+
+            public TestCaseDtoBuilder analysisId(String analysisId) {
+                this.analysisId = analysisId;
+                return this;
+            }
+
             public TestCaseDto build() {
-                return new TestCaseDto(testCaseId, testCaseName, testScenario, precondition, testSteps, expectedResult, priority, riskTags, relatedRequirements, evidences);
+                return new TestCaseDto(testCaseId, testCaseName, testScenario, precondition, testSteps, expectedResult, priority, riskTags, relatedRequirements, evidences, category, technique, tddHint, negativeScenario, analysisId);
             }
         }
     }

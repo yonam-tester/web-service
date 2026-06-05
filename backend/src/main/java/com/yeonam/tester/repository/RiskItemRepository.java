@@ -13,11 +13,11 @@ public interface RiskItemRepository extends JpaRepository<RiskItem, String> {
     List<RiskItem> findByTestCase_TestCaseId(String testCaseId);
     List<RiskItem> findByTestCase_TestCaseIdIn(List<String> testCaseIds);
 
-    @Modifying
+    @Modifying(clearAutomatically = true)
     @Query("DELETE FROM RiskItem r WHERE r.testCase.testCaseId IN :testCaseIds")
     void deleteByTestCaseIds(@Param("testCaseIds") List<String> testCaseIds);
 
-    @Modifying
+    @Modifying(clearAutomatically = true)
     @Query("DELETE FROM RiskItem r WHERE r.testCase.analysisJob.analysisId IN :analysisIds")
     void deleteByAnalysisIds(@Param("analysisIds") List<String> analysisIds);
 }

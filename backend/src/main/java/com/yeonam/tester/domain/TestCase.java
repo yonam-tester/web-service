@@ -40,9 +40,26 @@ public class TestCase {
     @Column(name = "confidence_level")
     private String confidenceLevel;
 
+    @Column(name = "category")
+    private String category;
+
+    @Column(name = "technique")
+    private String technique;
+
+    @Lob
+    @Column(name = "tdd_hint", columnDefinition = "CLOB")
+    private String tddHint;
+
+    @Lob
+    @Column(name = "negative_scenario", columnDefinition = "CLOB")
+    private String negativeScenario;
+
+    @OneToMany(mappedBy = "testCase", cascade = CascadeType.ALL, orphanRemoval = true)
+    private java.util.List<Evidence> evidences = new java.util.ArrayList<>();
+
     public TestCase() {}
 
-    public TestCase(String testCaseId, AnalysisJob analysisJob, Requirement requirement, String testCaseName, String testScenario, String precondition, String testSteps, String expectedResult, String priority, String confidenceLevel) {
+    public TestCase(String testCaseId, AnalysisJob analysisJob, Requirement requirement, String testCaseName, String testScenario, String precondition, String testSteps, String expectedResult, String priority, String confidenceLevel, String category, String technique, String tddHint, String negativeScenario) {
         this.testCaseId = testCaseId;
         this.analysisJob = analysisJob;
         this.requirement = requirement;
@@ -53,6 +70,10 @@ public class TestCase {
         this.expectedResult = expectedResult;
         this.priority = priority;
         this.confidenceLevel = confidenceLevel;
+        this.category = category;
+        this.technique = technique;
+        this.tddHint = tddHint;
+        this.negativeScenario = negativeScenario;
     }
 
     public String getTestCaseId() { return testCaseId; }
@@ -85,6 +106,21 @@ public class TestCase {
     public String getConfidenceLevel() { return confidenceLevel; }
     public void setConfidenceLevel(String confidenceLevel) { this.confidenceLevel = confidenceLevel; }
 
+    public String getCategory() { return category; }
+    public void setCategory(String category) { this.category = category; }
+
+    public String getTechnique() { return technique; }
+    public void setTechnique(String technique) { this.technique = technique; }
+
+    public String getTddHint() { return tddHint; }
+    public void setTddHint(String tddHint) { this.tddHint = tddHint; }
+
+    public String getNegativeScenario() { return negativeScenario; }
+    public void setNegativeScenario(String negativeScenario) { this.negativeScenario = negativeScenario; }
+
+    public java.util.List<Evidence> getEvidences() { return evidences; }
+    public void setEvidences(java.util.List<Evidence> evidences) { this.evidences = evidences; }
+
     public static TestCaseBuilder builder() {
         return new TestCaseBuilder();
     }
@@ -100,6 +136,10 @@ public class TestCase {
         private String expectedResult;
         private String priority;
         private String confidenceLevel;
+        private String category;
+        private String technique;
+        private String tddHint;
+        private String negativeScenario;
 
         public TestCaseBuilder testCaseId(String testCaseId) {
             this.testCaseId = testCaseId;
@@ -151,8 +191,28 @@ public class TestCase {
             return this;
         }
 
+        public TestCaseBuilder category(String category) {
+            this.category = category;
+            return this;
+        }
+
+        public TestCaseBuilder technique(String technique) {
+            this.technique = technique;
+            return this;
+        }
+
+        public TestCaseBuilder tddHint(String tddHint) {
+            this.tddHint = tddHint;
+            return this;
+        }
+
+        public TestCaseBuilder negativeScenario(String negativeScenario) {
+            this.negativeScenario = negativeScenario;
+            return this;
+        }
+
         public TestCase build() {
-            return new TestCase(testCaseId, analysisJob, requirement, testCaseName, testScenario, precondition, testSteps, expectedResult, priority, confidenceLevel);
+            return new TestCase(testCaseId, analysisJob, requirement, testCaseName, testScenario, precondition, testSteps, expectedResult, priority, confidenceLevel, category, technique, tddHint, negativeScenario);
         }
     }
 }

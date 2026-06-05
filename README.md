@@ -5,6 +5,15 @@
 
 ---
 
+## 📂 하위 모듈별 상세 가이드
+
+각 서브 모듈의 설계 구조, 상세 API 목록, 모듈별 구동 가이드는 아래 개별 문서를 참고하시면 편리합니다:
+- **[☕ 백엔드 모듈 상세 가이드 (Spring Boot)](file:///c:/capd/yeonam_tester/backend/README.md)**
+- **[🎨 프론트엔드 모듈 상세 가이드 (React)](file:///c:/capd/yeonam_tester/frontend/README.md)**
+- **[🐍 AI 분석 서버 상세 가이드 (FastAPI)](file:///c:/capd/yeonam_tester/llm_server/README.md)**
+
+---
+
 ## 🛠️ 시스템 아키텍처 및 기술 스택
 
 연암 테스터는 결합도가 낮은 **비동기 웹훅 기반의 3중 구조 아키텍처**로 구성되어 있습니다.
@@ -130,3 +139,43 @@ docker-compose up -d
    문서 및 프로젝트 삭제 시 관계형 DB(RDB)에 매핑된 데이터뿐만 아니라 S3 스토리지에 존재하는 원본 및 보고서 실물 파일까지 동기식으로 일괄 연쇄 삭제하여 저장 공간 누수를 완벽 차단합니다.
 8. **샌드박스 오프라인 데모 스위치 지원:**
    화면 상의 `샌드박스 데모 모드 (오프라인)` 스위치를 켜면 AI 서버 기동 없이도 8초 후 자동 가상 결과를 도출해주며, 이를 끄면 실물 AI 서버와 완전히 실시간 통신하게 됩니다.
+
+---
+
+## 🛠️ 최근 추가 개선 및 확장 스펙 (Phase 6)
+
+프로젝트 고도화 및 안정적이고 보안성 높은 협업 환경 구축을 위해 최근 추가된 4대 핵심 개선 내역입니다:
+
+### 1. 사용자 지정 LLM API Key 보안 파이프라인
+* **개념**: 서버 비용 절감 및 개별 보안을 위해 브라우저에서 입력한 LLM API Key를 동적으로 AI 서버(FastAPI) 추론 엔진까지 주입하는 흐름을 완비했습니다.
+* **보안 강화**: `<input type="password" />` 마스킹, 클립보드 복사 방지(`onCopy` 차단), `localStorage` 로컬 캐싱 방식을 사용하여 안전하게 키를 보존하며 분석 기동 시 DTO 파라미터(`llmApiKey`)를 통해 동적으로 송출됩니다. 키가 제공되지 않을 시 서버 환경 변수를 통한 폴백 추론이 연계됩니다.
+
+### 2. 다중 분석 작업 테스트 케이스 통합 보고서 생성
+* **개념**: 각기 다른 시점에 생성되었거나 다른 프로젝트 문서 분석을 통해 나온 테스트 케이스들을 체크박스로 자유롭게 복수 선택하여 **단일 마크다운 보고서로 안전하게 결합/매핑 및 영속화**할 수 있도록 데이터 구조와 서비스 계층(`ReportAssemblyService`)의 조립 필터를 고도화했습니다.
+
+### 3. 화면 가로 너비를 극대화한 UI/UX 개편
+* **개념**: 기존의 고정형 좌측 사이드바 레이아웃 구조를 상단 수평형 탭 네비게이션으로 통폐합했습니다. 본문 사용 너비를 약 25% 이상 늘려 300자 이상의 긴 테스트 카드들과 마크다운 다운로드 미리보기 화면을 쾌적하고 시원한 시각적 뷰포트로 제공합니다.
+
+### 4. 분석 명세서 단위 대시보드 리스트 및 트랜잭션 연쇄 파기
+* **개념**: 대시보드 관리 탭을 개별 테스트케이스 나열 방식에서 '분석 명세서(AnalysisJob)' 단위 관리 테이블로 개편했습니다. 
+* **연쇄 파기**: 휴지통 아이콘 클릭 시, 데이터 무결성 손상을 미연에 예방하는 동의 체크 UI 모달(`AnalysisDeleteModal`)이 활성화되며, 삭제 승인 시 RDB 내 매핑된 하위 엔티티들과 S3(MinIO) 스토리지 내 실제 물리 파일 Object까지 일률적으로 소멸시키는 완전 트랜잭션을 실행합니다.
+
+---
+
+## 🧪 추가 기능 통합 테스트 가이드 (JUnit 5)
+
+백엔드 폴더(`backend/`) 내에서 아래 Maven CLI 테스트 명령을 수행하여, 추가 구현된 신규 스펙들이 오차 없이 작동하는지 빌드 단에서 확인할 수 있습니다.
+
+```bash
+# 백엔드 모듈 경로로 이동
+cd backend
+
+# 1. 커스텀 API Key 분석 요청 DTO 바인딩 검증
+.maven\apache-maven-3.9.6\bin\mvn.cmd test -Dtest=Phase6ExtensionsTests#testAnalysisTriggerWithCustomApiKey
+
+# 2. 복수 분석 작업 소속 테스트케이스 하나의 보고서 매핑 검증
+.maven\apache-maven-3.9.6\bin\mvn.cmd test -Dtest=Phase6ExtensionsTests#testGenerateReportWithMultiJobTestCases
+
+# 3. 분석 데이터 영구 삭제 시 RDB Cascade 및 S3 삭제 완결성 검증
+.maven\apache-maven-3.9.6\bin\mvn.cmd test -Dtest=Phase6ExtensionsTests#testDeleteAnalysisJobCascades
+```

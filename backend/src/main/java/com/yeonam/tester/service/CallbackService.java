@@ -123,6 +123,10 @@ public class CallbackService {
                     .expectedResult(tcDto.getExpectedResult())
                     .priority(finalPriority)
                     .confidenceLevel(tcDto.getConfidenceLevel() != null ? tcDto.getConfidenceLevel() : "HIGH")
+                    .category(tcDto.getCategory())
+                    .technique(tcDto.getTechnique())
+                    .tddHint(tcDto.getTddHint())
+                    .negativeScenario(tcDto.getNegativeScenario())
                     .build();
 
             testCaseRepository.save(testCase);

@@ -42,9 +42,20 @@ public class ReportDownloadService {
      */
     @Transactional
     public byte[] downloadReportBytes(String reportId) {
+        return downloadReportBytes(reportId, "MARKDOWN");
+    }
+
+    @Transactional
+    public byte[] downloadReportBytes(String reportId, String format) {
         Report report = reportRepository.findById(reportId)
                 .orElseThrow(() -> new IllegalArgumentException("Report not found: " + reportId));
 
+        String targetFormat = format != null ? format.toUpperCase() : "MARKDOWN";
+        if (!"MARKDOWN".equals(targetFormat) && !"PDF".equals(targetFormat)) {
+            targetFormat = "MARKDOWN";
+        }
+
+        byte[] mdBytes = null;
         boolean fileExists = true;
         try {
             // Check if file exists in S3
@@ -56,52 +67,55 @@ public class ReportDownloadService {
         } catch (NoSuchKeyException e) {
             fileExists = false;
         } catch (Exception e) {
-            // Treat generic errors/connection errors as missing to trigger regeneration fallback
             fileExists = false;
         }
 
         if (fileExists) {
-            // File exists: download and return
             try {
                 GetObjectRequest getOb = GetObjectRequest.builder()
                         .bucket(reportsBucket)
                         .key(report.getS3Path())
                         .build();
                 ResponseBytes<?> responseBytes = s3Client.getObjectAsBytes(getOb);
-                return responseBytes.asByteArray();
+                mdBytes = responseBytes.asByteArray();
             } catch (Exception e) {
                 System.err.println("Failed to read report from S3: " + e.getMessage() + ". Regenerating as fallback...");
+                fileExists = false;
             }
         }
 
-        // File is missing or download failed: auto-regenerate (Fallback Recovery)
-        System.out.println("File lost in S3, auto-regenerating report: " + reportId);
-        String format = report.getFormat();
-        String analysisId = report.getAnalysisJob().getAnalysisId();
+        String markdown;
+        if (!fileExists || mdBytes == null) {
+            System.out.println("File lost in S3, auto-regenerating report: " + reportId);
+            String analysisId = report.getAnalysisJob().getAnalysisId();
+            java.util.List<String> tcIds = report.getReportTestCases().stream()
+                    .map(rtc -> rtc.getTestCase().getTestCaseId())
+                    .collect(java.util.stream.Collectors.toList());
 
-        Map<String, Object> data = assemblyService.assembleReportData(analysisId);
-        String markdown = renderEngine.renderMarkdown(data);
-        byte[] bytes;
+            Map<String, Object> data = assemblyService.assembleReportData(analysisId, tcIds);
+            markdown = renderEngine.renderMarkdown(data);
 
-        if ("PDF".equals(format)) {
-            bytes = renderEngine.renderPdf(markdown);
+            // Upload regenerated markdown file back to S3
+            try {
+                byte[] uploadBytes = markdown.getBytes(StandardCharsets.UTF_8);
+                PutObjectRequest putOb = PutObjectRequest.builder()
+                        .bucket(reportsBucket)
+                        .key(report.getS3Path())
+                        .contentType("text/markdown")
+                        .build();
+                s3Client.putObject(putOb, RequestBody.fromBytes(uploadBytes));
+            } catch (Exception e) {
+                System.err.println("Failed to upload regenerated report: " + e.getMessage());
+            }
         } else {
-            bytes = markdown.getBytes(StandardCharsets.UTF_8);
+            markdown = new String(mdBytes, StandardCharsets.UTF_8);
         }
 
-        // Upload regenerated file back to S3
-        try {
-            PutObjectRequest putOb = PutObjectRequest.builder()
-                    .bucket(reportsBucket)
-                    .key(report.getS3Path())
-                    .contentType("PDF".equals(format) ? "application/pdf" : "text/markdown")
-                    .build();
-
-            s3Client.putObject(putOb, RequestBody.fromBytes(bytes));
-        } catch (Exception e) {
-            System.err.println("Failed to upload regenerated report: " + e.getMessage());
+        // On-the-fly rendering based on requested format
+        if ("PDF".equals(targetFormat)) {
+            return renderEngine.renderPdf(markdown);
+        } else {
+            return markdown.getBytes(StandardCharsets.UTF_8);
         }
-
-        return bytes;
     }
 }

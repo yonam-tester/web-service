@@ -51,10 +51,14 @@ public class AnalysisCallbackRequest {
         private String confidenceLevel;
         private List<String> riskTags;
         private List<EvidenceDto> evidences;
+        private String category;
+        private String technique;
+        private String tddHint;
+        private String negativeScenario;
 
         public TestCaseDto() {}
 
-        public TestCaseDto(String testCaseId, String requirementId, String requirementText, String testCaseName, String testScenario, String precondition, List<String> testSteps, String expectedResult, String priority, String confidenceLevel, List<String> riskTags, List<EvidenceDto> evidences) {
+        public TestCaseDto(String testCaseId, String requirementId, String requirementText, String testCaseName, String testScenario, String precondition, List<String> testSteps, String expectedResult, String priority, String confidenceLevel, List<String> riskTags, List<EvidenceDto> evidences, String category, String technique, String tddHint, String negativeScenario) {
             this.testCaseId = testCaseId;
             this.requirementId = requirementId;
             this.requirementText = requirementText;
@@ -67,6 +71,10 @@ public class AnalysisCallbackRequest {
             this.confidenceLevel = confidenceLevel;
             this.riskTags = riskTags;
             this.evidences = evidences;
+            this.category = category;
+            this.technique = technique;
+            this.tddHint = tddHint;
+            this.negativeScenario = negativeScenario;
         }
 
         public String getTestCaseId() { return testCaseId; }
@@ -105,6 +113,18 @@ public class AnalysisCallbackRequest {
         public List<EvidenceDto> getEvidences() { return evidences; }
         public void setEvidences(List<EvidenceDto> evidences) { this.evidences = evidences; }
 
+        public String getCategory() { return category; }
+        public void setCategory(String category) { this.category = category; }
+
+        public String getTechnique() { return technique; }
+        public void setTechnique(String technique) { this.technique = technique; }
+
+        public String getTddHint() { return tddHint; }
+        public void setTddHint(String tddHint) { this.tddHint = tddHint; }
+
+        public String getNegativeScenario() { return negativeScenario; }
+        public void setNegativeScenario(String negativeScenario) { this.negativeScenario = negativeScenario; }
+
         public static TestCaseDtoBuilder builder() {
             return new TestCaseDtoBuilder();
         }
@@ -122,6 +142,10 @@ public class AnalysisCallbackRequest {
             private String confidenceLevel;
             private List<String> riskTags;
             private List<EvidenceDto> evidences;
+            private String category;
+            private String technique;
+            private String tddHint;
+            private String negativeScenario;
 
             public TestCaseDtoBuilder testCaseId(String testCaseId) {
                 this.testCaseId = testCaseId;
@@ -183,8 +207,28 @@ public class AnalysisCallbackRequest {
                 return this;
             }
 
+            public TestCaseDtoBuilder category(String category) {
+                this.category = category;
+                return this;
+            }
+
+            public TestCaseDtoBuilder technique(String technique) {
+                this.technique = technique;
+                return this;
+            }
+
+            public TestCaseDtoBuilder tddHint(String tddHint) {
+                this.tddHint = tddHint;
+                return this;
+            }
+
+            public TestCaseDtoBuilder negativeScenario(String negativeScenario) {
+                this.negativeScenario = negativeScenario;
+                return this;
+            }
+
             public TestCaseDto build() {
-                return new TestCaseDto(testCaseId, requirementId, requirementText, testCaseName, testScenario, precondition, testSteps, expectedResult, priority, confidenceLevel, riskTags, evidences);
+                return new TestCaseDto(testCaseId, requirementId, requirementText, testCaseName, testScenario, precondition, testSteps, expectedResult, priority, confidenceLevel, riskTags, evidences, category, technique, tddHint, negativeScenario);
             }
         }
     }

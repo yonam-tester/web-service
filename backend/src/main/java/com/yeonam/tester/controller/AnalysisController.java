@@ -6,6 +6,7 @@ import com.yeonam.tester.service.AnalysisService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import java.util.List;
 
 @RestController
 @CrossOrigin(origins = "*")
@@ -17,11 +18,7 @@ public class AnalysisController {
         this.analysisService = analysisService;
     }
 
-    @GetMapping("/api/projects/{projectId}/qa-recommendations")
-    public ResponseEntity<QaRecommendationResponse> getQaRecommendations(@PathVariable String projectId) {
-        QaRecommendationResponse recommendations = analysisService.getQaRecommendations(projectId);
-        return ResponseEntity.ok(recommendations);
-    }
+
 
     @PostMapping("/api/projects/{projectId}/analysis")
     public ResponseEntity<?> startAnalysis(@PathVariable String projectId, @RequestBody AnalysisCreateRequest request) {
@@ -44,6 +41,7 @@ public class AnalysisController {
                     .projectId(job.getProject().getProjectId())
                     .status(job.getStatus())
                     .createdAt(java.time.LocalDateTime.now())
+                    .qaPerspective(job.getQaPerspective())
                     .build();
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
@@ -73,6 +71,30 @@ public class AnalysisController {
 
     private static java.time.LocalDateTime LocalDateTimeFormatter(java.time.LocalDateTime dt) {
         return dt != null ? dt : java.time.LocalDateTime.now();
+    }
+
+    @GetMapping("/api/projects/{projectId}/analysis")
+    public ResponseEntity<?> getAnalysisJobsByProject(@PathVariable String projectId) {
+        try {
+            List<AnalysisJobResponse> responses = analysisService.getAnalysisJobsByProject(projectId);
+            return ResponseEntity.ok(responses);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ErrorResponse("Failed to fetch analysis jobs: " + e.getMessage()));
+        }
+    }
+
+    @DeleteMapping("/api/analysis/{analysisId}")
+    public ResponseEntity<?> deleteAnalysisJob(@PathVariable String analysisId) {
+        try {
+            analysisService.deleteAnalysisJob(analysisId);
+            return ResponseEntity.ok().build();
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErrorResponse(e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ErrorResponse("Failed to delete analysis job: " + e.getMessage()));
+        }
     }
 
     private static class ErrorResponse {

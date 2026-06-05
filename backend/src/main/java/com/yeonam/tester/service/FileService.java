@@ -1,9 +1,7 @@
 package com.yeonam.tester.service;
 
-import com.yeonam.tester.domain.Project;
-import com.yeonam.tester.domain.UploadedFile;
-import com.yeonam.tester.repository.ProjectRepository;
-import com.yeonam.tester.repository.UploadedFileRepository;
+import com.yeonam.tester.domain.*;
+import com.yeonam.tester.repository.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,17 +22,43 @@ public class FileService {
     private final S3Client s3Client;
     private final UploadedFileRepository fileRepository;
     private final ProjectRepository projectRepository;
+    private final ReportRepository reportRepository;
+    private final AnalysisJobRepository analysisJobRepository;
+    private final TestCaseRepository testCaseRepository;
+    private final RequirementRepository requirementRepository;
+    private final RiskItemRepository riskItemRepository;
+    private final EvidenceRepository evidenceRepository;
+    private final FilePreprocessingService filePreprocessingService;
 
     @Value("${aws.s3.buckets.documents}")
     private String documentsBucket;
 
+    @Value("${aws.s3.buckets.reports}")
+    private String reportsBucket;
+
     private static final long MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
     private static final List<String> ALLOWED_EXTENSIONS = Arrays.asList("pdf", "md", "txt", "docx");
 
-    public FileService(S3Client s3Client, UploadedFileRepository fileRepository, ProjectRepository projectRepository) {
+    public FileService(S3Client s3Client,
+                       UploadedFileRepository fileRepository,
+                       ProjectRepository projectRepository,
+                       ReportRepository reportRepository,
+                       AnalysisJobRepository analysisJobRepository,
+                       TestCaseRepository testCaseRepository,
+                       RequirementRepository requirementRepository,
+                       RiskItemRepository riskItemRepository,
+                       EvidenceRepository evidenceRepository,
+                       FilePreprocessingService filePreprocessingService) {
         this.s3Client = s3Client;
         this.fileRepository = fileRepository;
         this.projectRepository = projectRepository;
+        this.reportRepository = reportRepository;
+        this.analysisJobRepository = analysisJobRepository;
+        this.testCaseRepository = testCaseRepository;
+        this.requirementRepository = requirementRepository;
+        this.riskItemRepository = riskItemRepository;
+        this.evidenceRepository = evidenceRepository;
+        this.filePreprocessingService = filePreprocessingService;
     }
 
     /**
@@ -91,7 +115,9 @@ public class FileService {
                 .status("UPLOADED")
                 .build();
 
-        return fileRepository.save(uploadedFile);
+        UploadedFile saved = fileRepository.save(uploadedFile);
+        triggerAsyncPreprocessing(saved.getFileId());
+        return saved;
     }
 
     /**
@@ -127,7 +153,9 @@ public class FileService {
                 .status("UPLOADED")
                 .build();
 
-        return fileRepository.save(uploadedFile);
+        UploadedFile saved = fileRepository.save(uploadedFile);
+        triggerAsyncPreprocessing(saved.getFileId());
+        return saved;
     }
 
     /**
@@ -164,18 +192,84 @@ public class FileService {
     }
 
     /**
-     * Deletes file meta-data from H2 DB and deletes from S3
+     * Deletes file meta-data from H2 DB and deletes from S3, and cascades deleting related reports/analysis jobs/test cases.
      */
     @Transactional
     public void deleteFile(String fileId) {
         UploadedFile uploadedFile = fileRepository.findById(fileId)
                 .orElseThrow(() -> new IllegalArgumentException("File not found: " + fileId));
+        String projectId = uploadedFile.getProject().getProjectId();
 
-        // Delete from S3
+        // 1. UploadedFile이 포함된 프로젝트와 연관된 모든 AnalysisJob 목록을 쿼리
+        List<AnalysisJob> allJobs = analysisJobRepository.findByProject_ProjectId(projectId);
+
+        // 2. fileId와 연관된 Report 조회
+        List<Report> reports = reportRepository.findByUploadedFile_FileId(fileId);
+
+        // 3. 삭제 대상 AnalysisJob ID 목록 식별 (reports가 해당 fileId로 생성된 것인지 파싱/매핑)
+        List<String> targetAnalysisIds = reports.stream()
+                .map(r -> r.getAnalysisJob().getAnalysisId())
+                .distinct()
+                .collect(java.util.stream.Collectors.toList());
+
+        if (!targetAnalysisIds.isEmpty()) {
+            // 4. S3 물리 보고서 영구 삭제 (reportsBucket 버킷)
+            for (Report r : reports) {
+                if (targetAnalysisIds.contains(r.getAnalysisJob().getAnalysisId())) {
+                    try {
+                        DeleteObjectRequest deleteOb = DeleteObjectRequest.builder()
+                                .bucket(reportsBucket)
+                                .key(r.getS3Path())
+                                .build();
+                        s3Client.deleteObject(deleteOb);
+                        System.out.println("Deleted S3 Report object: " + r.getS3Path());
+                    } catch (Exception e) {
+                        System.err.println("Failed to delete S3 report: " + r.getS3Path() + ". Error: " + e.getMessage());
+                    }
+                }
+            }
+
+            // 5. 역순 의존성에 맞게 DB 레코드 벌크 삭제
+            // Evidence -> RiskItem -> TestCase -> Requirement -> Report -> AnalysisJob
+
+            // a. TestCase IDs 수집
+            List<TestCase> testCases = testCaseRepository.findAll();
+            List<String> testCaseIds = testCases.stream()
+                    .filter(tc -> targetAnalysisIds.contains(tc.getAnalysisJob().getAnalysisId()))
+                    .map(TestCase::getTestCaseId)
+                    .collect(java.util.stream.Collectors.toList());
+
+            if (!testCaseIds.isEmpty()) {
+                evidenceRepository.deleteByTestCaseIds(testCaseIds);
+                riskItemRepository.deleteByTestCaseIds(testCaseIds);
+            }
+
+            testCaseRepository.deleteByAnalysisIds(targetAnalysisIds);
+            requirementRepository.deleteByAnalysisIds(targetAnalysisIds);
+            reportRepository.deleteByAnalysisIds(targetAnalysisIds);
+            analysisJobRepository.deleteAllById(targetAnalysisIds);
+        }
+
+        // 6. S3에서 원본 업로드 문서 물리 파일 삭제
         deleteFileFromS3(uploadedFile.getS3Path());
 
-        // Delete from DB
+        // 7. UploadedFile 삭제
         fileRepository.delete(uploadedFile);
+    }
+
+    private void triggerAsyncPreprocessing(final String fileId) {
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                new org.springframework.transaction.support.TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        filePreprocessingService.preprocessFile(fileId);
+                    }
+                }
+            );
+        } else {
+            filePreprocessingService.preprocessFile(fileId);
+        }
     }
 
     public List<UploadedFile> getFilesByProjectId(String projectId) {

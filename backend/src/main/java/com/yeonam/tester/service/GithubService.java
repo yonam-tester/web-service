@@ -152,6 +152,36 @@ public class GithubService {
         return null;
     }
 
+    /**
+     * Fetches repository description from GitHub API.
+     * Returns description text, or null if private/errors.
+     */
+    public String fetchRepositoryDescription(String githubUrl) {
+        try {
+            String[] parsed = parseGithubUrl(githubUrl);
+            String owner = parsed[0];
+            String repo = parsed[1];
+            String apiUrl = String.format("https://api.github.com/repos/%s/%s", owner, repo);
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(apiUrl))
+                    .header("User-Agent", "yeonam-tester-app")
+                    .header("Accept", "application/vnd.github.v3+json")
+                    .timeout(Duration.ofSeconds(5))
+                    .GET()
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() == 200) {
+                return extractJsonKeyValue(response.body(), "description");
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to fetch GitHub repo description: " + e.getMessage());
+        }
+        return null;
+    }
+
     private String extractJsonKeyValue(String json, String key) {
         String searchPattern = "\"" + key + "\"\\s*:\\s*\"([^\"]+)\"";
         Pattern pattern = Pattern.compile(searchPattern);

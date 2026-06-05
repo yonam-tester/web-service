@@ -15,9 +15,14 @@ export const DocumentUploadPage: React.FC = () => {
   const [uploadType, setUploadType] = useState<'REQUIREMENT_SPEC' | 'REFERENCE'>('REQUIREMENT_SPEC');
   
   // Recommendations and settings
-  const [recommendedPerspectives, setRecommendedPerspectives] = useState<string[]>([]);
   const [selectedPerspectives, setSelectedPerspectives] = useState<string[]>([]);
   const [customPrompt, setCustomPrompt] = useState('');
+  const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    const doneFiles = files.filter(f => f.status === 'DONE').map(f => f.documentId);
+    setSelectedDocIds(doneFiles);
+  }, [files]);
   
   // Job triggers
   const [analysisProgress, setAnalysisProgress] = useState(0);
@@ -62,26 +67,32 @@ export const DocumentUploadPage: React.FC = () => {
   useEffect(() => {
     if (projectId) {
       fetchProjectFiles(projectId);
-      fetchRecommendations(projectId);
     }
   }, [projectId]);
+
+  useEffect(() => {
+    let intervalId: any = null;
+    const hasUnfinishedFiles = files.some(
+      f => f.status !== 'DONE' && f.status !== 'FAILED'
+    );
+
+    if (projectId && hasUnfinishedFiles) {
+      intervalId = setInterval(() => {
+        fetchProjectFiles(projectId);
+      }, 2000);
+    }
+
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [files, projectId]);
 
   const fetchProjectFiles = async (pId: string) => {
     try {
       const response = await fileApi.getByProject(pId);
       setFiles(response.data);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const fetchRecommendations = async (pId: string) => {
-    try {
-      const response = await analysisApi.getRecommendations(pId);
-      setRecommendedPerspectives(response.data.recommendedPerspectives);
-      
-      // Auto-select recommended ones initially
-      setSelectedPerspectives(response.data.recommendedPerspectives);
     } catch (err) {
       console.error(err);
     }
@@ -128,7 +139,6 @@ export const DocumentUploadPage: React.FC = () => {
     try {
       await fileApi.upload(projectId, file, uploadType);
       fetchProjectFiles(projectId);
-      fetchRecommendations(projectId); // Update recommendations dynamically based on uploaded content
     } catch (err: any) {
       console.error(err);
       setError(err.response?.data?.message || '파일 업로드 실패: 서버 연결 상태를 확인해 주세요.');
@@ -161,7 +171,6 @@ export const DocumentUploadPage: React.FC = () => {
     try {
       await fileApi.upload(projectId, file, uploadType);
       fetchProjectFiles(projectId);
-      fetchRecommendations(projectId);
     } catch (err: any) {
       console.error(err);
       setError(err.response?.data?.message || '파일 드롭 업로드에 실패했습니다.');
@@ -175,7 +184,6 @@ export const DocumentUploadPage: React.FC = () => {
       try {
         await fileApi.delete(fileId);
         fetchProjectFiles(projectId);
-        fetchRecommendations(projectId);
       } catch (err) {
         console.error(err);
         setError('문서 파기에 실패했습니다.');
@@ -195,6 +203,10 @@ export const DocumentUploadPage: React.FC = () => {
 
   const handleStartAnalysis = async () => {
     if (!projectId) return;
+    if (selectedDocIds.length === 0) {
+      setError('분석할 문서를 최소 하나 이상 선택해 주세요.');
+      return;
+    }
     if (selectedPerspectives.length === 0) {
       setError('최소 하나의 QA 검증 관점을 선택해 주세요.');
       return;
@@ -205,9 +217,10 @@ export const DocumentUploadPage: React.FC = () => {
 
     try {
       const response = await analysisApi.start(projectId, {
-        targetDocumentIds: files.map(f => f.documentId),
+        targetDocumentIds: selectedDocIds,
         qaPerspectives: selectedPerspectives,
         customPrompt,
+        llmApiKey: localStorage.getItem('yeonam_llm_api_key') || '',
       });
 
       const newAnalysisId = response.data.analysisId;
@@ -335,16 +348,7 @@ export const DocumentUploadPage: React.FC = () => {
     await api.post(`/internal/analysis/${anlId}/callback`, payload);
   };
 
-  const [selectedHashtags, setSelectedHashtags] = useState<string[]>([]);
-  const recommendedHashtags = ['#입력값_검증', '#API_보안', '#결제_트랜잭션'];
 
-  const handleHashtagToggle = (hashtag: string) => {
-    if (selectedHashtags.includes(hashtag)) {
-      setSelectedHashtags(selectedHashtags.filter(h => h !== hashtag));
-    } else {
-      setSelectedHashtags([...selectedHashtags, hashtag]);
-    }
-  };
 
   return (
     <div className="max-w-7xl mx-auto space-y-8 animate-fade-in">
@@ -459,7 +463,20 @@ export const DocumentUploadPage: React.FC = () => {
                 <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
                   {files.map((file) => (
                     <div key={file.documentId} className="flex items-center justify-between p-3 rounded bg-white/5 border border-white/5 group hover:border-white/10 transition-all">
-                      <div className="flex items-center gap-2.5 min-w-0 pr-4">
+                      <div className="flex items-center gap-3 min-w-0 pr-4">
+                        <input
+                          type="checkbox"
+                          disabled={file.status !== 'DONE'}
+                          checked={selectedDocIds.includes(file.documentId)}
+                          onChange={() => {
+                            if (selectedDocIds.includes(file.documentId)) {
+                              setSelectedDocIds(selectedDocIds.filter(id => id !== file.documentId));
+                            } else {
+                              setSelectedDocIds([...selectedDocIds, file.documentId]);
+                            }
+                          }}
+                          className="w-4 h-4 rounded border-outline-variant bg-surface-container text-primary focus:ring-primary/40 cursor-pointer shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
+                        />
                         <span className={`material-symbols-outlined text-lg ${file.fileName === GITHUB_README_SIMULATION_FLAG ? "text-indigo-400 animate-pulse" : "text-slate-400"}`}>description</span>
                         <div className="min-w-0">
                           <span className="block text-sm text-slate-200 truncate font-mono">{file.fileName}</span>
@@ -491,29 +508,7 @@ export const DocumentUploadPage: React.FC = () => {
                 <h2 className="font-headline-lg-mobile text-headline-lg-mobile font-semibold text-white">QA 분석 관점 설정</h2>
               </div>
 
-              {/* Custom Recommended Chips */}
-              <div className="space-y-2">
-                <h3 className="text-xs font-label-caps text-on-surface-variant mb-sm uppercase tracking-wider">시스템 추천 맞춤형 QA 관점</h3>
-                <div className="flex flex-wrap gap-sm">
-                  {recommendedHashtags.map((tag) => {
-                    const isSelected = selectedHashtags.includes(tag);
-                    return (
-                      <button
-                        key={tag}
-                        type="button"
-                        onClick={() => handleHashtagToggle(tag)}
-                        className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all active:scale-95 ${
-                          isSelected
-                            ? 'glass-panel-heavy border-primary/60 text-primary glow-indigo'
-                            : 'glass-panel border-white/10 text-on-surface-variant hover:border-tertiary/60 hover:text-tertiary'
-                        }`}
-                      >
-                        <span className="font-mono">{tag}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+
 
               {/* Base Perspectives */}
               <div className="space-y-3 pt-2">
@@ -521,7 +516,6 @@ export const DocumentUploadPage: React.FC = () => {
                 <div className="grid grid-cols-2 gap-sm">
                   {['SECURITY', 'BACKEND', 'FRONTEND', 'PERFORMANCE', 'API'].map((p) => {
                     const isSelected = selectedPerspectives.includes(p);
-                    const isRecommended = recommendedPerspectives.includes(p);
                     
                     return (
                       <label key={p} className="flex items-center gap-base cursor-pointer group select-none">
@@ -532,7 +526,7 @@ export const DocumentUploadPage: React.FC = () => {
                           className="w-5 h-5 rounded border-outline-variant bg-surface-container text-primary focus:ring-primary/40 cursor-pointer"
                         />
                         <span className={`text-body-sm group-hover:text-primary transition-colors text-xs ${isSelected ? 'text-primary font-semibold' : 'text-slate-300'}`}>
-                          {p} {isRecommended && '✨'}
+                          {p}
                         </span>
                       </label>
                     );
@@ -587,7 +581,7 @@ export const DocumentUploadPage: React.FC = () => {
               <div className="flex flex-col gap-sm pt-2">
                 <button
                   onClick={handleStartAnalysis}
-                  disabled={files.length === 0 || loading}
+                  disabled={selectedDocIds.length === 0 || loading}
                   className="w-full py-md rounded-xl bg-gradient-to-r from-[#6366F1] to-[#8B5CF6] text-white font-headline-lg-mobile font-bold flex items-center justify-center gap-sm hover:brightness-110 active:scale-[0.98] transition-all glow-indigo disabled:opacity-40 disabled:pointer-events-none"
                 >
                   <span className="material-symbols-outlined text-lg">bolt</span>

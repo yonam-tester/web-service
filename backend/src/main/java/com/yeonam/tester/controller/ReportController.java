@@ -37,8 +37,11 @@ public class ReportController {
     }
 
     @GetMapping("/api/projects/{projectId}/reports")
-    public ResponseEntity<ReportListResponse> getReportsByProject(@PathVariable String projectId) {
-        ReportListResponse response = reportService.getReportsByProject(projectId);
+    public ResponseEntity<ReportListResponse> getReportsByProject(
+            @PathVariable String projectId,
+            @RequestParam(required = false) String fileId,
+            @RequestParam(required = false) String analysisId) {
+        ReportListResponse response = reportService.getReportsByProject(projectId, fileId, analysisId);
         return ResponseEntity.ok(response);
     }
 
@@ -55,15 +58,17 @@ public class ReportController {
     }
 
     @GetMapping("/api/reports/{reportId}/download")
-    public ResponseEntity<?> downloadReport(@PathVariable String reportId) {
+    public ResponseEntity<?> downloadReport(@PathVariable String reportId, @RequestParam(required = false) String format) {
         try {
-            byte[] fileBytes = reportDownloadService.downloadReportBytes(reportId);
-            // Retrieve report format from service to choose MIME type
-            ReportPreviewResponse preview = reportService.getReportPreview(reportId);
-            String format = preview.getReportFormat();
+            String targetFormat = format != null ? format.toUpperCase() : "MARKDOWN";
+            if (!"MARKDOWN".equals(targetFormat) && !"PDF".equals(targetFormat)) {
+                targetFormat = "MARKDOWN";
+            }
 
-            String extension = "PDF".equals(format) ? "pdf" : "md";
-            String contentType = "PDF".equals(format) ? "application/pdf" : "text/markdown";
+            byte[] fileBytes = reportDownloadService.downloadReportBytes(reportId, targetFormat);
+
+            String extension = "PDF".equals(targetFormat) ? "pdf" : "md";
+            String contentType = "PDF".equals(targetFormat) ? "application/pdf" : "text/markdown";
             String fileName = String.format("QA_Report_%s.%s", reportId, extension);
 
             return ResponseEntity.ok()

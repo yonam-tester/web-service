@@ -2,12 +2,15 @@ package com.yeonam.tester.service;
 
 import com.yeonam.tester.domain.AnalysisJob;
 import com.yeonam.tester.domain.Report;
+import com.yeonam.tester.domain.ReportTestCase;
 import com.yeonam.tester.dto.ReportCreateRequest;
 import com.yeonam.tester.dto.ReportListResponse;
 import com.yeonam.tester.dto.ReportPreviewResponse;
 import com.yeonam.tester.dto.ReportResponse;
 import com.yeonam.tester.repository.AnalysisJobRepository;
 import com.yeonam.tester.repository.ReportRepository;
+import com.yeonam.tester.repository.ReportTestCaseRepository;
+import com.yeonam.tester.repository.TestCaseRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,6 +36,8 @@ public class ReportService {
     private final ReportAssemblyService assemblyService;
     private final ReportRenderEngine renderEngine;
     private final S3Client s3Client;
+    private final ReportTestCaseRepository reportTestCaseRepository;
+    private final TestCaseRepository testCaseRepository;
 
     @Value("${aws.s3.buckets.reports}")
     private String reportsBucket;
@@ -41,12 +46,16 @@ public class ReportService {
                          AnalysisJobRepository analysisJobRepository,
                          ReportAssemblyService assemblyService,
                          ReportRenderEngine renderEngine,
-                         S3Client s3Client) {
+                         S3Client s3Client,
+                         ReportTestCaseRepository reportTestCaseRepository,
+                         TestCaseRepository testCaseRepository) {
         this.reportRepository = reportRepository;
         this.analysisJobRepository = analysisJobRepository;
         this.assemblyService = assemblyService;
         this.renderEngine = renderEngine;
         this.s3Client = s3Client;
+        this.reportTestCaseRepository = reportTestCaseRepository;
+        this.testCaseRepository = testCaseRepository;
     }
 
     /**
@@ -63,26 +72,21 @@ public class ReportService {
                 .orElseThrow(() -> new IllegalArgumentException("Analysis job not found: " + analysisId));
 
         String reportId = "RPT-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-        String extension = "MARKDOWN".equals(format) ? "md" : "pdf";
+        // S3 cache single format: always standard markdown
+        String extension = "md";
         String s3Path = String.format("reports/%s/%s.%s", analysisId, reportId, extension);
 
         // Assemble and Render content
-        Map<String, Object> data = assemblyService.assembleReportData(analysisId);
+        Map<String, Object> data = assemblyService.assembleReportData(analysisId, request.getTestCaseIds());
         String markdown = renderEngine.renderMarkdown(data);
-        byte[] bytes;
-
-        if ("PDF".equals(format)) {
-            bytes = renderEngine.renderPdf(markdown);
-        } else {
-            bytes = markdown.getBytes(StandardCharsets.UTF_8);
-        }
+        byte[] bytes = markdown.getBytes(StandardCharsets.UTF_8);
 
         // Upload to S3 (reportsBucket)
         try {
             PutObjectRequest putOb = PutObjectRequest.builder()
                     .bucket(reportsBucket)
                     .key(s3Path)
-                    .contentType("PDF".equals(format) ? "application/pdf" : "text/markdown")
+                    .contentType("text/markdown")
                     .build();
 
             s3Client.putObject(putOb, RequestBody.fromBytes(bytes));
@@ -95,11 +99,26 @@ public class ReportService {
                 .reportId(reportId)
                 .analysisJob(job)
                 .s3Path(s3Path)
-                .format(format)
+                .format("MARKDOWN") // Standardize DB metadata to MARKDOWN
                 .createdAt(LocalDateTime.now())
                 .build();
 
         Report savedReport = reportRepository.save(report);
+
+        // Save N:M mapping for selected test cases
+        if (request.getTestCaseIds() != null && !request.getTestCaseIds().isEmpty()) {
+            for (String tcId : request.getTestCaseIds()) {
+                testCaseRepository.findById(tcId).ifPresent(tc -> {
+                    ReportTestCase rtc = ReportTestCase.builder()
+                            .report(savedReport)
+                            .testCase(tc)
+                            .build();
+                    reportTestCaseRepository.save(rtc);
+                    // Also populate the bidirection relationship to avoid lazy load issues in testing
+                    savedReport.getReportTestCases().add(rtc);
+                });
+            }
+        }
 
         return ReportResponse.builder()
                 .reportId(savedReport.getReportId())
@@ -115,7 +134,17 @@ public class ReportService {
      * Lists all reports for a specific project.
      */
     public ReportListResponse getReportsByProject(String projectId) {
-        List<Report> reports = reportRepository.findByAnalysisJob_Project_ProjectId(projectId);
+        return getReportsByProject(projectId, null, null);
+    }
+
+    /**
+     * Lists reports for a specific project, optionally filtered by fileId and/or analysisId.
+     */
+    public ReportListResponse getReportsByProject(String projectId, String fileId, String analysisId) {
+        String filterFileId = (fileId != null && !fileId.trim().isEmpty()) ? fileId.trim() : null;
+        String filterAnalysisId = (analysisId != null && !analysisId.trim().isEmpty()) ? analysisId.trim() : null;
+
+        List<Report> reports = reportRepository.findByProjectWithFilters(projectId, filterFileId, filterAnalysisId);
         List<ReportListResponse.ReportItemDto> dtos = reports.stream()
                 .map(r -> ReportListResponse.ReportItemDto.builder()
                         .reportId(r.getReportId())

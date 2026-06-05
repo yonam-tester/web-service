@@ -6,6 +6,8 @@ import com.yeonam.tester.repository.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -27,6 +29,11 @@ public class AnalysisService {
     private final RiskItemRepository riskItemRepository;
     private final EvidenceRepository evidenceRepository;
     private final HttpClient httpClient;
+    private final S3Client s3Client;
+    private final ReportRepository reportRepository;
+
+    @Value("${aws.s3.buckets.reports}")
+    private String reportsBucket;
 
     @Value("${ai.server.url:http://localhost:8000}")
     private String aiServerUrl;
@@ -37,7 +44,9 @@ public class AnalysisService {
                            TestCaseRepository testCaseRepository,
                            RequirementRepository requirementRepository,
                            RiskItemRepository riskItemRepository,
-                           EvidenceRepository evidenceRepository) {
+                           EvidenceRepository evidenceRepository,
+                           S3Client s3Client,
+                           ReportRepository reportRepository) {
         this.analysisJobRepository = analysisJobRepository;
         this.projectRepository = projectRepository;
         this.fileRepository = fileRepository;
@@ -45,58 +54,14 @@ public class AnalysisService {
         this.requirementRepository = requirementRepository;
         this.riskItemRepository = riskItemRepository;
         this.evidenceRepository = evidenceRepository;
+        this.s3Client = s3Client;
+        this.reportRepository = reportRepository;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(5))
                 .build();
     }
 
-    /**
-     * Generates a list of recommended QA perspectives based on uploaded documents.
-     */
-    public QaRecommendationResponse getQaRecommendations(String projectId) {
-        List<UploadedFile> files = fileRepository.findByProject_ProjectId(projectId);
-        
-        List<String> perspectives = new ArrayList<>();
-        StringBuilder reason = new StringBuilder("업로드된 문서 분석 결과: ");
 
-        boolean hasSecurity = false;
-        boolean hasBackend = false;
-        boolean hasFrontend = false;
-
-        for (UploadedFile file : files) {
-            String name = file.getFileName().toLowerCase();
-            if (name.contains("security") || name.contains("인증") || name.contains("보안") || name.contains("비밀번호") || name.contains("결제")) {
-                hasSecurity = true;
-            }
-            if (name.contains("api") || name.contains("백엔드") || name.contains("db") || name.contains("데이터베이스") || name.contains("server")) {
-                hasBackend = true;
-            }
-            if (name.contains("ui") || name.contains("화면") || name.contains("프론트") || name.contains("web") || name.contains("page")) {
-                hasFrontend = true;
-            }
-        }
-
-        if (hasSecurity) {
-            perspectives.add("SECURITY");
-        }
-        if (hasBackend || perspectives.isEmpty()) {
-            perspectives.add("BACKEND");
-        }
-        if (hasFrontend) {
-            perspectives.add("FRONTEND");
-        }
-
-        if (hasSecurity) {
-            reason.append("문서 내 '결제', '비밀번호', '인증' 관련 키워드가 포함되어 보안 관점 검증이 최우선적으로 권장됩니다. ");
-        } else {
-            reason.append("기본 시스템 구성 요소 검증을 위해 백엔드 기능성 및 데이터 정합성 관점 검증이 추천됩니다. ");
-        }
-
-        return QaRecommendationResponse.builder()
-                .recommendedPerspectives(perspectives)
-                .reason(reason.toString())
-                .build();
-    }
 
     /**
      * Initiates the AI/RAG analysis job on the selected documents.
@@ -108,13 +73,47 @@ public class AnalysisService {
 
         String analysisId = "ANL-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
 
+        // Assemble QA Perspective prompts
+        StringBuilder perspectivePrompt = new StringBuilder();
+        if (request.getQaPerspectives() != null && !request.getQaPerspectives().isEmpty()) {
+            perspectivePrompt.append("[QA 검증 관점 가이드]\n");
+            for (String p : request.getQaPerspectives()) {
+                switch (p.toUpperCase()) {
+                    case "SECURITY":
+                        perspectivePrompt.append("- SECURITY: 인증, 인가, 데이터 오용, 입력값 유효성 검증을 위한 침투형 시나리오 수립에 집중하라.\n");
+                        break;
+                    case "PERFORMANCE":
+                        perspectivePrompt.append("- PERFORMANCE: 시스템 부하, 응답 지연, 리소스 병목 현상 및 동시성 처리에 대한 한계 조건 검증에 집중하라.\n");
+                        break;
+                    case "BACKEND":
+                        perspectivePrompt.append("- BACKEND: 서버 비즈니스 로직, 데이터베이스 트랜잭션 예외 처리 및 비동기 작업 정합성 검증에 집중하라.\n");
+                        break;
+                    case "FRONTEND":
+                        perspectivePrompt.append("- FRONTEND: UI/UX 렌더링, 컴포넌트 상태 변화, 이벤트 핸들링 및 다국어/해상도 호환성 검증에 집중하라.\n");
+                        break;
+                    case "API":
+                        perspectivePrompt.append("- API: 엔드포인트 인터페이스 규격, HTTP 에러 코드 정의 및 데이터 요청/응답 형식의 일치 여부 검증에 집중하라.\n");
+                        break;
+                    default:
+                        perspectivePrompt.append("- ").append(p).append(": 해당 관점의 비즈니스 로직 적합성을 검증하라.\n");
+                        break;
+                }
+            }
+            perspectivePrompt.append("\n");
+        }
+
+        String mergedCustomPrompt = request.getCustomPrompt() != null ? request.getCustomPrompt() : "";
+        if (perspectivePrompt.length() > 0) {
+            mergedCustomPrompt = perspectivePrompt.toString() + mergedCustomPrompt;
+        }
+
         // 1. Create and Save AnalysisJob entity
         String perspectiveStr = request.getQaPerspectives() != null ? String.join(",", request.getQaPerspectives()) : "";
         AnalysisJob job = AnalysisJob.builder()
                 .analysisId(analysisId)
                 .project(project)
                 .qaPerspective(perspectiveStr)
-                .customPrompt(request.getCustomPrompt())
+                .customPrompt(mergedCustomPrompt)
                 .status("WAITING")
                 .build();
 
@@ -133,35 +132,36 @@ public class AnalysisService {
                 .collect(Collectors.toList());
 
         // 3. Send async trigger HTTP request to FastAPI server
-        triggerExternalAiServer(savedJob, s3Paths, request.getQaPerspectives(), request.getCustomPrompt());
+        triggerExternalAiServer(savedJob, s3Paths, request.getQaPerspectives(), mergedCustomPrompt, request.getLlmApiKey());
 
         return AnalysisJobResponse.builder()
                 .analysisId(savedJob.getAnalysisId())
                 .projectId(projectId)
                 .status(savedJob.getStatus())
                 .createdAt(LocalDateTime.now())
+                .qaPerspective(savedJob.getQaPerspective())
                 .build();
     }
-
-    private void triggerExternalAiServer(AnalysisJob job, List<String> s3Paths, List<String> perspectives, String customPrompt) {
+    private void triggerExternalAiServer(AnalysisJob job, List<String> s3Paths, List<String> perspectives, String customPrompt, String llmApiKey) {
         // Construct FastAPI trigger JSON payload manually to keep dependency-free
         StringBuilder jsonBuilder = new StringBuilder();
         jsonBuilder.append("{")
-                .append("\"analysisId\":\"").append(job.getAnalysisId()).append("\",")
-                .append("\"projectId\":\"").append(job.getProject().getProjectId()).append("\",")
-                .append("\"customPrompt\":\"").append(customPrompt != null ? customPrompt.replace("\"", "\\\"") : "").append("\",")
+                .append("\"analysisId\":\"").append(escapeJsonString(job.getAnalysisId())).append("\",")
+                .append("\"projectId\":\"").append(escapeJsonString(job.getProject().getProjectId())).append("\",")
+                .append("\"customPrompt\":\"").append(escapeJsonString(customPrompt)).append("\",")
+                .append("\"llmApiKey\":\"").append(escapeJsonString(llmApiKey)).append("\",")
                 .append("\"qaPerspectives\":[");
         
         if (perspectives != null) {
             for (int i = 0; i < perspectives.size(); i++) {
-                jsonBuilder.append("\"").append(perspectives.get(i)).append("\"");
+                jsonBuilder.append("\"").append(escapeJsonString(perspectives.get(i))).append("\"");
                 if (i < perspectives.size() - 1) jsonBuilder.append(",");
             }
         }
         jsonBuilder.append("],");
         jsonBuilder.append("\"s3Paths\":[");
         for (int i = 0; i < s3Paths.size(); i++) {
-            jsonBuilder.append("\"").append(s3Paths.get(i)).append("\"");
+            jsonBuilder.append("\"").append(escapeJsonString(s3Paths.get(i))).append("\"");
             if (i < s3Paths.size() - 1) jsonBuilder.append(",");
         }
         jsonBuilder.append("]}");
@@ -196,6 +196,48 @@ public class AnalysisService {
             analysisJobRepository.save(job);
             return null;
         });
+    }
+
+    private String escapeJsonString(String input) {
+        if (input == null) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < input.length(); i++) {
+            char ch = input.charAt(i);
+            switch (ch) {
+                case '"':
+                    sb.append("\\\"");
+                    break;
+                case '\\':
+                    sb.append("\\\\");
+                    break;
+                case '\b':
+                    sb.append("\\b");
+                    break;
+                case '\f':
+                    sb.append("\\f");
+                    break;
+                case '\n':
+                    sb.append("\\n");
+                    break;
+                case '\r':
+                    sb.append("\\r");
+                    break;
+                case '\t':
+                    sb.append("\\t");
+                    break;
+                default:
+                    if (ch < ' ') {
+                        String t = "000" + Integer.toHexString(ch);
+                        sb.append("\\u").append(t.substring(t.length() - 4));
+                    } else {
+                        sb.append(ch);
+                    }
+                    break;
+            }
+        }
+        return sb.toString();
     }
 
     /**
@@ -297,6 +339,10 @@ public class AnalysisService {
                     .riskTags(riskTags)
                     .relatedRequirements(Collections.singletonList(tc.getRequirement().getRequirementId()))
                     .evidences(evDtos)
+                    .category(tc.getCategory())
+                    .technique(tc.getTechnique())
+                    .tddHint(tc.getTddHint())
+                    .negativeScenario(tc.getNegativeScenario())
                     .build();
         }).collect(Collectors.toList());
 
@@ -311,5 +357,56 @@ public class AnalysisService {
                 .testCases(tcDtos)
                 .missingItems(missing)
                 .build();
+    }
+
+    /**
+     * Gets all analysis jobs belonging to a project.
+     */
+    @Transactional(readOnly = true)
+    public List<AnalysisJobResponse> getAnalysisJobsByProject(String projectId) {
+        List<AnalysisJob> jobs = analysisJobRepository.findByProject_ProjectId(projectId);
+        return jobs.stream().map(job -> AnalysisJobResponse.builder()
+                .analysisId(job.getAnalysisId())
+                .projectId(projectId)
+                .status(job.getStatus())
+                .createdAt(LocalDateTime.now()) // Dummy created timestamp mapping
+                .qaPerspective(job.getQaPerspective())
+                .build()).collect(Collectors.toList());
+    }
+
+    /**
+     * Deletes a single analysis job, cascading deletion of associated entities and S3 report files.
+     */
+    @Transactional
+    public void deleteAnalysisJob(String analysisId) {
+        AnalysisJob job = analysisJobRepository.findById(analysisId)
+                .orElseThrow(() -> new IllegalArgumentException("Analysis job not found: " + analysisId));
+
+        List<String> analysisIds = Collections.singletonList(analysisId);
+
+        // 1. Query and delete reports from DB and S3 physical bucket
+        List<Report> reports = reportRepository.findByAnalysisJob_AnalysisIdIn(analysisIds);
+        for (Report report : reports) {
+            try {
+                DeleteObjectRequest deleteOb = DeleteObjectRequest.builder()
+                        .bucket(reportsBucket)
+                        .key(report.getS3Path())
+                        .build();
+                s3Client.deleteObject(deleteOb);
+                System.out.println("Deleted S3 report object: " + report.getS3Path());
+            } catch (Exception e) {
+                System.err.println("Failed to delete S3 report: " + report.getS3Path() + ". Error: " + e.getMessage());
+            }
+        }
+        reportRepository.deleteByAnalysisIds(analysisIds);
+
+        // 2. Delete associated evidences, risks, test cases, and requirements from DB
+        evidenceRepository.deleteByAnalysisIds(analysisIds);
+        riskItemRepository.deleteByAnalysisIds(analysisIds);
+        testCaseRepository.deleteByAnalysisIds(analysisIds);
+        requirementRepository.deleteByAnalysisIds(analysisIds);
+
+        // 3. Delete analysis job itself
+        analysisJobRepository.delete(job);
     }
 }

@@ -28,6 +28,9 @@ public class Report {
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
+    @OneToMany(mappedBy = "report", cascade = CascadeType.ALL, orphanRemoval = true)
+    private java.util.List<ReportTestCase> reportTestCases = new java.util.ArrayList<>();
+
     public Report() {}
 
     public Report(String reportId, AnalysisJob analysisJob, UploadedFile uploadedFile, String s3Path, String format, LocalDateTime createdAt) {
@@ -56,6 +59,9 @@ public class Report {
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
+    public java.util.List<ReportTestCase> getReportTestCases() { return reportTestCases; }
+    public void setReportTestCases(java.util.List<ReportTestCase> reportTestCases) { this.reportTestCases = reportTestCases; }
 
     public static ReportBuilder builder() {
         return new ReportBuilder();

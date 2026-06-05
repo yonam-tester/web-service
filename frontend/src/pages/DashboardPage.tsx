@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { projectApi, fileApi, reportApi, Project, UploadedFile, ReportItem } from '../services/api';
+import { projectApi, fileApi, reportApi, analysisApi, Project, UploadedFile, ReportItem, AnalysisJobResponse } from '../services/api';
 
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
@@ -17,6 +17,17 @@ export const DashboardPage: React.FC = () => {
   
   // Search history state
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeFilterFileId, setActiveFilterFileId] = useState<string>('');
+
+  // Tabs and Analysis jobs state
+  const [activeTab, setActiveTab] = useState<'reports' | 'testcases'>('reports');
+  const [analysisJobs, setAnalysisJobs] = useState<AnalysisJobResponse[]>([]);
+  const [downloadDropdownId, setDownloadDropdownId] = useState<string | null>(null);
+
+  // Analysis deletion states
+  const [isAnalysisDeleteModalOpen, setIsAnalysisDeleteModalOpen] = useState(false);
+  const [analysisToDelete, setAnalysisToDelete] = useState<AnalysisJobResponse | null>(null);
+  const [analysisDeleteChecked, setAnalysisDeleteChecked] = useState(false);
 
   // Modals state
   const [isDocDeleteModalOpen, setIsDocDeleteModalOpen] = useState(false);
@@ -30,6 +41,11 @@ export const DashboardPage: React.FC = () => {
 
   useEffect(() => {
     fetchProjects();
+    const handleOutsideClick = () => {
+      setDownloadDropdownId(null);
+    };
+    document.addEventListener('click', handleOutsideClick);
+    return () => document.removeEventListener('click', handleOutsideClick);
   }, []);
 
   const fetchProjects = async () => {
@@ -52,16 +68,70 @@ export const DashboardPage: React.FC = () => {
     }
   };
 
+  const fetchReports = async (projectId: string, fileId?: string) => {
+    try {
+      const reportsResp = await reportApi.getByProject(projectId, fileId);
+      setReports(reportsResp.data.reports || []);
+    } catch (err: any) {
+      console.error(err);
+      setError('보고서 목록을 불러오는 데 실패했습니다.');
+    }
+  };
+
   useEffect(() => {
     if (selectedProjectId) {
       setSearchParams({ projectId: selectedProjectId });
+      setActiveFilterFileId('');
+      setActiveTab('reports');
       fetchProjectDetails(selectedProjectId);
     } else {
       setProjectDetails(null);
       setFiles([]);
       setReports([]);
+      setActiveFilterFileId('');
     }
   }, [selectedProjectId]);
+
+  useEffect(() => {
+    if (selectedProjectId) {
+      fetchReports(selectedProjectId, activeFilterFileId);
+    }
+  }, [activeFilterFileId]);
+
+  useEffect(() => {
+    let intervalId: any = null;
+    const hasUnfinishedFiles = files.some(
+      f => f.status !== 'DONE' && f.status !== 'FAILED'
+    );
+
+    if (selectedProjectId && hasUnfinishedFiles) {
+      intervalId = setInterval(() => {
+        fetchProjectDetails(selectedProjectId);
+      }, 2000);
+    }
+
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [files, selectedProjectId]);
+
+  const fetchProjectAnalysisJobs = async (projectId: string) => {
+    try {
+      const response = await analysisApi.getByProject(projectId);
+      setAnalysisJobs(response.data);
+    } catch (err: any) {
+      console.error(err);
+      setError('분석 명세서 목록을 불러오는 데 실패했습니다.');
+    }
+  };
+
+  useEffect(() => {
+    if (selectedProjectId && activeTab === 'testcases') {
+      fetchProjectAnalysisJobs(selectedProjectId);
+    }
+  }, [selectedProjectId, activeTab]);
 
   const fetchProjectDetails = async (projectId: string) => {
     try {
@@ -71,8 +141,9 @@ export const DashboardPage: React.FC = () => {
       const filesResp = await fileApi.getByProject(projectId);
       setFiles(filesResp.data);
 
-      const reportsResp = await reportApi.getByProject(projectId);
-      setReports(reportsResp.data.reports || []);
+      await fetchReports(projectId, activeFilterFileId);
+      
+      await fetchProjectAnalysisJobs(projectId);
     } catch (err: any) {
       console.error(err);
       setError('프로젝트 세부 데이터를 불러오는 데 실패했습니다.');
@@ -90,7 +161,7 @@ export const DashboardPage: React.FC = () => {
   };
 
   const handleDownloadReport = (reportId: string, format: string) => {
-    const url = reportApi.download(reportId);
+    const url = reportApi.download(reportId, format);
     const link = document.createElement('a');
     link.href = url;
     const extension = format.toLowerCase() === 'pdf' ? 'pdf' : 'md';
@@ -146,6 +217,22 @@ export const DashboardPage: React.FC = () => {
     }
   };
 
+  const handleDeleteAnalysisJob = async () => {
+    if (!analysisToDelete) return;
+    try {
+      await analysisApi.delete(analysisToDelete.analysisId);
+      setIsAnalysisDeleteModalOpen(false);
+      setAnalysisToDelete(null);
+      if (selectedProjectId) {
+        fetchProjectAnalysisJobs(selectedProjectId);
+        fetchReports(selectedProjectId, activeFilterFileId);
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert('분석 명세서 삭제에 실패했습니다.');
+    }
+  };
+
   const formatFileSize = (bytes: number) => {
     if (!bytes) return '0 Bytes';
     const k = 1024;
@@ -194,7 +281,7 @@ export const DashboardPage: React.FC = () => {
                 onClick={() => setSelectedProjectId(project.projectId)}
                 className={`glass-panel rounded-xl p-md relative group hover:scale-[1.02] transition-all duration-300 cursor-pointer ${
                   project.projectId === selectedProjectId 
-                    ? 'ring-2 ring-primary/60 border-primary/50' 
+                    ? 'ring-4 ring-indigo-500 bg-indigo-500/15 shadow-[0_0_30px_rgba(99,102,241,0.6)] border-indigo-400 scale-[1.03]' 
                     : ''
                 }`}
               >
@@ -293,7 +380,26 @@ export const DashboardPage: React.FC = () => {
                   {files.map((file, idx) => (
                     <tr key={file.documentId} className="hover:bg-white/5 transition-colors">
                       <td className="px-6 py-4 font-code-sm text-code-sm">{String(idx + 1).padStart(2, '0')}</td>
-                      <td className="px-6 py-4 font-body-md text-body-md truncate max-w-xs md:max-w-md">{file.fileName}</td>
+                      <td className="px-6 py-4 font-body-md text-body-md truncate max-w-xs md:max-w-md">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate">{file.fileName}</span>
+                          <button
+                            onClick={() => {
+                              if (activeFilterFileId === file.documentId) {
+                                setActiveFilterFileId('');
+                              } else {
+                                setActiveFilterFileId(file.documentId);
+                              }
+                            }}
+                            className={`p-1 rounded hover:bg-white/10 transition-colors shrink-0 ${
+                              activeFilterFileId === file.documentId ? 'text-indigo-400' : 'text-on-surface-variant opacity-40 hover:opacity-100'
+                            }`}
+                            title={activeFilterFileId === file.documentId ? "필터 해제" : "이 문서의 보고서만 보기"}
+                          >
+                            <span className="material-symbols-outlined text-[18px]">filter_alt</span>
+                          </button>
+                        </div>
+                      </td>
                       <td className="px-6 py-4">
                         {file.fileType === 'REQUIREMENT_SPEC' ? (
                           <span className="text-xs bg-primary/20 text-indigo-200 border border-primary/20 px-2 py-1 rounded">요구사항 명세서</span>
@@ -344,112 +450,268 @@ export const DashboardPage: React.FC = () => {
         </section>
       )}
 
-      {/* Section 3: Analysis & Report History */}
+      {/* Section 3: Analysis & Report History / Test Case Board */}
       {projectDetails && (
-        <section className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-md gap-4">
-            <div>
-              <h2 className="font-headline-lg text-headline-lg text-on-surface flex items-center gap-3">
-                <span className="material-symbols-outlined text-primary">history_edu</span>
-                분석 및 보고서 이력
-              </h2>
-              <p className="text-on-surface-variant font-body-sm text-body-sm mt-1">자동 생성된 테스트 케이스 시나리오 및 산출물 파일 목록</p>
-            </div>
-            
-            <div className="flex items-center gap-4 w-full md:w-auto">
-              <div className="flex items-center glass-panel-heavy rounded-xl px-4 py-2 w-full md:w-80">
-                <span className="material-symbols-outlined text-on-surface-variant mr-3">search</span>
-                <input 
-                  className="bg-transparent border-none focus:ring-0 text-sm w-full placeholder:text-on-surface-variant/40 outline-none text-on-background" 
-                  placeholder="보고서 ID 또는 작업 단위 검색..." 
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
-
-              <button
-                onClick={() => navigate(`/upload-demo?projectId=${selectedProjectId}&step=2`)}
-                disabled={files.length === 0}
-                className="primary-gradient px-4 py-2.5 rounded-xl text-white font-bold flex items-center gap-2 active:scale-95 transition-transform text-xs shrink-0 disabled:opacity-40 disabled:pointer-events-none"
-                style={{ background: 'linear-gradient(45deg, #6366f1, #8b5cf6)' }}
-              >
-                <span className="material-symbols-outlined text-xs">play_arrow</span>
-                QA 검증 분석 실행
-              </button>
-            </div>
+        <section className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
+          <div className="flex border-b border-white/10 gap-6">
+            <button
+              onClick={() => setActiveTab('reports')}
+              className={`pb-3 font-bold text-sm flex items-center gap-2 transition-all border-b-2 ${
+                activeTab === 'reports' ? 'text-primary border-primary' : 'text-slate-400 border-transparent hover:text-slate-200'
+              }`}
+            >
+              <span className="material-symbols-outlined text-sm">history_edu</span>
+              분석 및 보고서 이력
+            </button>
+            <button
+              onClick={() => setActiveTab('testcases')}
+              className={`pb-3 font-bold text-sm flex items-center gap-2 transition-all border-b-2 ${
+                activeTab === 'testcases' ? 'text-primary border-primary' : 'text-slate-400 border-transparent hover:text-slate-200'
+              }`}
+            >
+              <span className="material-symbols-outlined text-sm">checklist</span>
+              테스트 케이스 관리 보드
+            </button>
           </div>
 
-          <div className="space-y-sm">
-            {filteredReports.length === 0 ? (
-              <div className="text-center py-10 border border-dashed border-white/5 rounded-lg text-slate-500 text-sm">
-                생성된 보고서 이력이 없습니다.
-              </div>
-            ) : (
-              filteredReports.map((report) => (
-                <div key={report.reportId} className="glass-panel p-4 rounded-xl flex items-center justify-between group">
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-8 min-w-0 flex-1">
-                    <div className="font-code-md text-code-md text-primary bg-primary/10 px-3 py-1 rounded border border-primary/20 w-fit shrink-0">
-                      {report.reportId}
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-on-surface-variant font-label-caps shrink-0">FORMAT:</span>
-                      <span className={`text-xs px-2.5 py-0.5 rounded font-semibold border ${
-                        report.reportFormat === 'PDF' 
-                          ? 'bg-red-500/10 text-red-300 border-red-500/20' 
-                          : 'bg-green-500/10 text-green-300 border-green-500/20'
-                      }`}>
-                        {report.reportFormat}
+          {activeTab === 'reports' ? (
+            <div className="space-y-md">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-md gap-4">
+                <div>
+                  <h2 className="font-headline-lg text-headline-lg text-on-surface flex items-center gap-3">
+                    <span className="material-symbols-outlined text-primary">history_edu</span>
+                    분석 및 보고서 이력
+                  </h2>
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    <p className="text-on-surface-variant font-body-sm text-body-sm">자동 생성된 테스트 케이스 시나리오 및 산출물 파일 목록</p>
+                    {activeFilterFileId && (
+                      <span className="bg-indigo-500/10 text-indigo-400 text-[11px] font-bold px-2 py-0.5 rounded border border-indigo-500/20 inline-flex items-center gap-1 shrink-0">
+                        필터 적용 중: {files.find(f => f.documentId === activeFilterFileId)?.fileName || activeFilterFileId}
+                        <button 
+                          onClick={() => setActiveFilterFileId('')}
+                          className="hover:text-white flex items-center"
+                          title="필터 해제"
+                        >
+                          <span className="material-symbols-outlined text-[14px]">close</span>
+                        </button>
                       </span>
-                    </div>
-
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-[10px] text-on-surface-variant font-label-caps shrink-0">JOB ID:</span>
-                      <span className="font-mono text-xs text-slate-300 truncate">{report.analysisId}</span>
-                    </div>
-
-                    <div className="hidden lg:flex items-center gap-4">
-                      <span className="text-xs text-on-surface-variant font-label-caps">ACTIONS:</span>
-                      <a 
-                        onClick={() => navigate(`/report-demo?reportId=${report.reportId}`)}
-                        className="flex items-center gap-1.5 text-secondary hover:underline text-xs cursor-pointer"
-                      >
-                        <span className="material-symbols-outlined text-sm">preview</span> 미리보기
-                      </a>
-                      <a 
-                        onClick={() => handleDownloadReport(report.reportId, report.reportFormat)}
-                        className="flex items-center gap-1.5 text-secondary hover:underline text-xs cursor-pointer"
-                      >
-                        <span className="material-symbols-outlined text-sm">download</span> 다운로드
-                      </a>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-6 shrink-0 ml-4">
-                    <span className="text-[11px] text-slate-500 font-mono hidden md:inline">
-                      {new Date(report.generatedAt).toLocaleString('ko-KR')}
-                    </span>
-                    <span className="flex items-center gap-1.5 text-emerald-400 font-bold text-xs">
-                      <span className="status-dot bg-emerald-500"></span> 완료
-                    </span>
-                    <button 
-                      onClick={async () => {
-                        if (confirm('이 보고서를 영구 삭제하시겠습니까? (S3 물리 파일도 완전 삭제됩니다)')) {
-                          await reportApi.delete(report.reportId);
-                          fetchProjectDetails(selectedProjectId);
-                        }
-                      }}
-                      className="text-on-surface-variant hover:text-error transition-colors p-1"
-                      title="영구 파기"
-                    >
-                      <span className="material-symbols-outlined text-[20px]">delete_forever</span>
-                    </button>
+                    )}
                   </div>
                 </div>
-              ))
-            )}
-          </div>
+                
+                <div className="flex items-center gap-4 w-full md:w-auto">
+                  <div className="flex items-center glass-panel-heavy rounded-xl px-4 py-2 w-full md:w-80">
+                    <span className="material-symbols-outlined text-on-surface-variant mr-3">search</span>
+                    <input 
+                      className="bg-transparent border-none focus:ring-0 text-sm w-full placeholder:text-on-surface-variant/40 outline-none text-on-background" 
+                      placeholder="보고서 ID 또는 작업 단위 검색..." 
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                  </div>
+
+                  <button
+                    onClick={() => navigate(`/upload-demo?projectId=${selectedProjectId}&step=2`)}
+                    disabled={files.length === 0}
+                    className="primary-gradient px-4 py-2.5 rounded-xl text-white font-bold flex items-center gap-2 active:scale-95 transition-transform text-xs shrink-0 disabled:opacity-40 disabled:pointer-events-none"
+                    style={{ background: 'linear-gradient(45deg, #6366f1, #8b5cf6)' }}
+                  >
+                    <span className="material-symbols-outlined text-xs">play_arrow</span>
+                    QA 검증 분석 실행
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-sm">
+                {filteredReports.length === 0 ? (
+                  <div className="text-center py-10 border border-dashed border-white/5 rounded-lg text-slate-500 text-sm">
+                    {activeFilterFileId ? "이 문서에 대해 생성된 보고서 이력이 없습니다." : "생성된 보고서 이력이 없습니다."}
+                  </div>
+                ) : (
+                  filteredReports.map((report) => (
+                    <div key={report.reportId} className="glass-panel p-4 rounded-xl flex items-center justify-between group">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-8 min-w-0 flex-1">
+                        <div className="font-code-md text-code-md text-primary bg-primary/10 px-3 py-1 rounded border border-primary/20 w-fit shrink-0">
+                          {report.reportId}
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-on-surface-variant font-label-caps shrink-0">FORMAT:</span>
+                          <span className={`text-xs px-2.5 py-0.5 rounded font-semibold border ${
+                            report.reportFormat === 'PDF' 
+                              ? 'bg-red-500/10 text-red-300 border-red-500/20' 
+                              : 'bg-green-500/10 text-green-300 border-green-500/20'
+                          }`}>
+                            {report.reportFormat}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-[10px] text-on-surface-variant font-label-caps shrink-0">JOB ID:</span>
+                          <span className="font-mono text-xs text-slate-300 truncate">{report.analysisId}</span>
+                        </div>
+
+                        <div className="hidden lg:flex items-center gap-4">
+                          <span className="text-xs text-on-surface-variant font-label-caps">ACTIONS:</span>
+                          <a 
+                            onClick={() => navigate(`/report-demo?reportId=${report.reportId}`)}
+                            className="flex items-center gap-1.5 text-secondary hover:underline text-xs cursor-pointer"
+                          >
+                            <span className="material-symbols-outlined text-sm">preview</span> 미리보기
+                          </a>
+                          <div className="relative" onClick={(e) => e.stopPropagation()}>
+                            <a 
+                              onClick={() => setDownloadDropdownId(downloadDropdownId === report.reportId ? null : report.reportId)}
+                              className="flex items-center gap-1 text-secondary hover:underline text-xs cursor-pointer select-none"
+                            >
+                              <span className="material-symbols-outlined text-sm">download</span> 다운로드
+                              <span className="material-symbols-outlined text-[12px]">expand_more</span>
+                            </a>
+
+                            {downloadDropdownId === report.reportId && (
+                              <div className="absolute right-0 mt-2 w-36 rounded-lg shadow-lg bg-surface-container-high border border-white/10 z-30 py-1 overflow-hidden">
+                                <button
+                                  onClick={() => {
+                                    handleDownloadReport(report.reportId, 'MARKDOWN');
+                                    setDownloadDropdownId(null);
+                                  }}
+                                  className="w-full text-left px-3 py-1.5 text-[11px] text-slate-200 hover:bg-white/10 transition-colors flex items-center gap-2"
+                                >
+                                  <span className="material-symbols-outlined text-sm text-slate-400">description</span>
+                                  Markdown (.md)
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    handleDownloadReport(report.reportId, 'PDF');
+                                    setDownloadDropdownId(null);
+                                  }}
+                                  className="w-full text-left px-3 py-1.5 text-[11px] text-slate-200 hover:bg-white/10 transition-colors flex items-center gap-2 border-t border-white/5"
+                                >
+                                  <span className="material-symbols-outlined text-sm text-red-400">picture_as_pdf</span>
+                                  PDF (.pdf)
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-6 shrink-0 ml-4">
+                        <span className="text-[11px] text-slate-500 font-mono hidden md:inline">
+                          {new Date(report.generatedAt).toLocaleString('ko-KR')}
+                        </span>
+                        <span className="flex items-center gap-1.5 text-emerald-400 font-bold text-xs">
+                          <span className="status-dot bg-emerald-500"></span> 완료
+                        </span>
+                        <button 
+                          onClick={async () => {
+                            if (confirm('이 보고서를 영구 삭제하시겠습니까? (S3 물리 파일도 완전 삭제됩니다)')) {
+                              await reportApi.delete(report.reportId);
+                              fetchProjectDetails(selectedProjectId);
+                            }
+                          }}
+                          className="text-on-surface-variant hover:text-error transition-colors p-1"
+                          title="영구 파기"
+                        >
+                          <span className="material-symbols-outlined text-[20px]">delete_forever</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-md">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-md gap-4">
+                <div>
+                  <h2 className="font-headline-lg text-headline-lg text-on-surface flex items-center gap-3">
+                    <span className="material-symbols-outlined text-primary">checklist</span>
+                    테스트 케이스 관리 보드
+                  </h2>
+                  <p className="text-on-surface-variant font-body-sm text-body-sm mt-1">수행된 QA 검증 분석 단위로 테스트 케이스를 관리합니다. 명세서 항목 선택 시 상세 분석 결과 화면으로 이동합니다.</p>
+                </div>
+              </div>
+
+              <div className="glass-panel rounded-xl overflow-hidden">
+                {analysisJobs.length === 0 ? (
+                  <div className="text-center py-12 text-slate-500 text-sm">
+                    아직 생성된 분석 명세서가 없습니다. 'QA 검증 분석 실행'을 통해 분석을 실행해 주세요.
+                  </div>
+                ) : (
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-white/5 border-b border-white/10">
+                        <th className="px-6 py-4 font-label-caps text-label-caps text-on-surface-variant">분석 ID</th>
+                        <th className="px-6 py-4 font-label-caps text-label-caps text-on-surface-variant">검증 관점</th>
+                        <th className="px-6 py-4 font-label-caps text-label-caps text-on-surface-variant">상태</th>
+                        <th className="px-6 py-4 font-label-caps text-label-caps text-on-surface-variant">생성일시</th>
+                        <th className="px-6 py-4 font-label-caps text-label-caps text-on-surface-variant text-right">관리</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {analysisJobs.map((job) => (
+                        <tr 
+                          key={job.analysisId} 
+                          onClick={() => navigate(`/analysis-demo?analysisId=${job.analysisId}`)}
+                          className="hover:bg-white/10 transition-colors cursor-pointer"
+                        >
+                          <td className="px-6 py-4 font-code-sm text-code-sm text-secondary font-mono">{job.analysisId}</td>
+                          <td className="px-6 py-4 text-xs text-slate-300">
+                            {job.qaPerspective ? (
+                              <div className="flex flex-wrap gap-1">
+                                {job.qaPerspective.split(',').map((p, pIdx) => (
+                                  <span key={pIdx} className="bg-primary/20 text-indigo-200 border border-primary/20 px-2 py-0.5 rounded text-[10px] uppercase font-semibold">
+                                    {p.trim()}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-slate-500 font-italic">지정되지 않음</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4">
+                            {job.status === 'COMPLETED' && (
+                              <span className="flex items-center gap-1.5 text-emerald-400 font-bold text-xs">
+                                <span className="material-symbols-outlined text-sm">check_circle</span> 분석 완료
+                              </span>
+                            )}
+                            {(job.status === 'PROCESSING' || job.status === 'QUEUED' || job.status === 'PENDING') && (
+                              <span className="flex items-center gap-1.5 text-orange-400 font-bold text-xs animate-pulse">
+                                <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span> 분석 중
+                              </span>
+                            )}
+                            {job.status === 'FAILED' && (
+                              <span className="flex items-center gap-1.5 text-error font-bold text-xs">
+                                <span className="material-symbols-outlined text-sm">error</span> 실패
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 text-xs font-mono text-slate-400">
+                            {job.createdAt ? new Date(job.createdAt).toLocaleString('ko-KR') : '-'}
+                          </td>
+                          <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                            <button 
+                              onClick={() => {
+                                setAnalysisToDelete(job);
+                                setAnalysisDeleteChecked(false);
+                                setIsAnalysisDeleteModalOpen(true);
+                              }}
+                              className="p-2 hover:bg-error/20 rounded-lg text-on-surface-variant hover:text-error transition-colors"
+                              title="분석 명세서 삭제"
+                            >
+                              <span className="material-symbols-outlined text-[18px]">delete</span>
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
         </section>
       )}
 
@@ -554,6 +816,52 @@ export const DashboardPage: React.FC = () => {
                 className="px-6 py-2.5 rounded-xl bg-error text-white font-bold transition-all text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:bg-red-600 active:scale-95"
               >
                 프로젝트 파기 실행
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Analysis Job Delete Warning Modal Overlay */}
+      {isAnalysisDeleteModalOpen && analysisToDelete && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="glass-panel-heavy rounded-2xl p-lg max-w-lg w-full mx-margin-mobile shadow-2xl border-white/20">
+            <div className="flex items-start gap-4 mb-6">
+              <div className="w-12 h-12 rounded-full bg-error/20 flex items-center justify-center flex-shrink-0">
+                <span className="material-symbols-outlined text-error text-3xl">warning</span>
+              </div>
+              <div>
+                <h4 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface mb-2">분석 명세서 영구 파기 경고</h4>
+                <p className="text-on-surface-variant font-body-sm text-body-sm leading-relaxed text-slate-300">
+                  이 분석 명세서를 삭제하면 이 작업과 연결된 모든 <span className="text-error font-bold underline">요구사항 목록, 테스트 케이스 시나리오, 검증 근거 데이터, 해시태그 및 S3 물리 보고서 파일</span>이 완전히 연쇄 영구 소멸됩니다. 이 작업은 되돌릴 수 없습니다.
+                </p>
+                <p className="text-xs text-slate-400 mt-2 font-mono">분석 ID: {analysisToDelete.analysisId}</p>
+              </div>
+            </div>
+
+            <label className="flex items-center gap-3 p-4 bg-white/5 rounded-xl border border-white/10 cursor-pointer mb-8 group hover:bg-white/10 transition-all select-none">
+              <input 
+                className="w-5 h-5 rounded border-white/20 bg-transparent text-error focus:ring-error transition-all cursor-pointer" 
+                type="checkbox"
+                checked={analysisDeleteChecked}
+                onChange={(e) => setAnalysisDeleteChecked(e.target.checked)}
+              />
+              <span className="text-on-surface text-xs font-bold text-slate-200">본 작업을 영구 삭제함에 동의합니다.</span>
+            </label>
+
+            <div className="flex justify-end gap-4">
+              <button 
+                onClick={() => setIsAnalysisDeleteModalOpen(false)}
+                className="px-6 py-2.5 rounded-xl border border-white/20 text-on-surface-variant hover:bg-white/10 transition-all font-bold text-sm text-slate-300"
+              >
+                취소
+              </button>
+              <button 
+                onClick={handleDeleteAnalysisJob}
+                disabled={!analysisDeleteChecked}
+                className="px-6 py-2.5 rounded-xl bg-error text-white font-bold transition-all text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:bg-red-600 active:scale-95"
+              >
+                삭제
               </button>
             </div>
           </div>

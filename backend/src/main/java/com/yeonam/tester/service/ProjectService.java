@@ -79,6 +79,16 @@ public class ProjectService {
                 branch = defaultBranch;
             }
             integrationStatus = "SUCCESS";
+
+            // Fetch and override project description with GitHub metadata if description is empty or to prioritize GitHub metadata
+            try {
+                String githubDesc = githubService.fetchRepositoryDescription(url);
+                if (githubDesc != null && !githubDesc.trim().isEmpty()) {
+                    request.setDescription(githubDesc);
+                }
+            } catch (Exception e) {
+                System.err.println("Failed to fetch repository description from GitHub: " + e.getMessage());
+            }
         } else {
             url = null;
             branch = null;

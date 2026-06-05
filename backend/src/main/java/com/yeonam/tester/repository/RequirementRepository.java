@@ -12,7 +12,7 @@ import java.util.List;
 public interface RequirementRepository extends JpaRepository<Requirement, String> {
     List<Requirement> findByAnalysisJob_AnalysisId(String analysisId);
 
-    @Modifying
+    @Modifying(clearAutomatically = true)
     @Query("DELETE FROM Requirement r WHERE r.analysisJob.analysisId IN :analysisIds")
     void deleteByAnalysisIds(@Param("analysisIds") List<String> analysisIds);
 }

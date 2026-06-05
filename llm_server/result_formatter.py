@@ -100,5 +100,39 @@ def format_and_validate_result(raw_text: str) -> dict:
         else:
             # Ensure risk tags have '#' prefix
             tc["riskTags"] = [tag if tag.startswith("#") else f"#{tag}" for tag in tc["riskTags"]]
+
+        # Atlassian QA Extended fields validation and fallback
+        if "category" not in tc or not tc["category"]:
+            tc["category"] = "qa_concept"
+            
+        if "technique" not in tc or not tc["technique"]:
+            tc["technique"] = "Atlassian QA Standard Principle"
+            
+        if "tddHint" not in tc or not tc["tddHint"]:
+            tc["tddHint"] = "추가 검토 필요"
+            
+        if "negativeScenario" not in tc or not tc["negativeScenario"]:
+            tc["negativeScenario"] = "추가 검토 필요"
+            
+        # Evidences handling
+        if "evidences" not in tc or not isinstance(tc["evidences"], list):
+            tc["evidences"] = [
+                {
+                    "chunkId": f"CHK-{i+1:03d}",
+                    "evidenceText": tc["testScenario"],
+                    "sourceName": "Unknown Source",
+                    "sourceSection": "기타"
+                }
+            ]
+        else:
+            for ev in tc["evidences"]:
+                if "chunkId" not in ev or not ev["chunkId"]:
+                    ev["chunkId"] = f"CHK-{i+1:03d}"
+                if "evidenceText" not in ev or not ev["evidenceText"]:
+                    ev["evidenceText"] = tc["testScenario"]
+                if "sourceName" not in ev or not ev["sourceName"]:
+                    ev["sourceName"] = "Unknown Source"
+                if "sourceSection" not in ev or not ev["sourceSection"]:
+                    ev["sourceSection"] = "기타"
             
     return data

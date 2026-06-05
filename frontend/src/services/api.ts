@@ -51,6 +51,7 @@ export interface AnalysisCreateRequest {
   targetDocumentIds: string[];
   qaPerspectives: string[];
   customPrompt: string;
+  llmApiKey?: string;
 }
 
 export interface AnalysisJobResponse {
@@ -58,6 +59,7 @@ export interface AnalysisJobResponse {
   projectId: string;
   status: string;
   createdAt: string;
+  qaPerspective?: string;
 }
 
 export interface AnalysisStatusResponse {
@@ -86,6 +88,11 @@ export interface TestCase {
   riskTags: string[];
   relatedRequirements: string[];
   evidences: Evidence[];
+  category?: string;
+  technique?: string;
+  tddHint?: string;
+  negativeScenario?: string;
+  analysisId: string;
 }
 
 export interface AnalysisResultResponse {
@@ -141,17 +148,24 @@ export const fileApi = {
 };
 
 export const analysisApi = {
-  getRecommendations: (projectId: string) => api.get<QaRecommendationResponse>(`/projects/${projectId}/qa-recommendations`),
   start: (projectId: string, data: AnalysisCreateRequest) => api.post<AnalysisJobResponse>(`/projects/${projectId}/analysis`, data),
   getJob: (analysisId: string) => api.get<AnalysisJobResponse>(`/analysis/${analysisId}`),
   getStatus: (analysisId: string) => api.get<AnalysisStatusResponse>(`/analysis/${analysisId}/status`),
   getResults: (analysisId: string) => api.get<AnalysisResultResponse>(`/analysis/${analysisId}/results`),
+  getByProject: (projectId: string) => api.get<AnalysisJobResponse[]>(`/projects/${projectId}/analysis`),
+  delete: (analysisId: string) => api.delete(`/analysis/${analysisId}`),
 };
 
 export const reportApi = {
-  generate: (analysisId: string, format: 'MARKDOWN' | 'PDF') => api.post<any>(`/analysis/${analysisId}/reports`, { reportFormat: format }),
-  getByProject: (projectId: string) => api.get<ReportListResponse>(`/projects/${projectId}/reports`),
+  generate: (analysisId: string, format: 'MARKDOWN' | 'PDF', testCaseIds?: string[]) => api.post<any>(`/analysis/${analysisId}/reports`, { reportFormat: format, testCaseIds }),
+  getByProject: (projectId: string, fileId?: string, analysisId?: string) => api.get<ReportListResponse>(`/projects/${projectId}/reports`, { params: { fileId, analysisId } }),
   getPreview: (reportId: string) => api.get<ReportPreviewResponse>(`/reports/${reportId}`),
-  download: (reportId: string) => `${API_BASE_URL}/reports/${reportId}/download`,
+  download: (reportId: string, format?: string) => `${API_BASE_URL}/reports/${reportId}/download${format ? `?format=${format}` : ''}`,
   delete: (reportId: string) => api.delete(`/reports/${reportId}`),
+};
+
+export const testCaseApi = {
+  getByProject: (projectId: string) => api.get<TestCase[]>(`/projects/${projectId}/testcases`),
+  update: (testCaseId: string, data: Partial<TestCase>) => api.put<TestCase>(`/testcases/${testCaseId}`, data),
+  delete: (testCaseId: string) => api.delete(`/testcases/${testCaseId}`),
 };

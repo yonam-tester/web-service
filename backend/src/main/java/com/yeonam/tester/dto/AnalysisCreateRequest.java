@@ -6,6 +6,7 @@ public class AnalysisCreateRequest {
     private List<String> targetDocumentIds;
     private List<String> qaPerspectives;
     private String customPrompt;
+    private String llmApiKey;
 
     public AnalysisCreateRequest() {}
 
@@ -13,6 +14,13 @@ public class AnalysisCreateRequest {
         this.targetDocumentIds = targetDocumentIds;
         this.qaPerspectives = qaPerspectives;
         this.customPrompt = customPrompt;
+    }
+
+    public AnalysisCreateRequest(List<String> targetDocumentIds, List<String> qaPerspectives, String customPrompt, String llmApiKey) {
+        this.targetDocumentIds = targetDocumentIds;
+        this.qaPerspectives = qaPerspectives;
+        this.customPrompt = customPrompt;
+        this.llmApiKey = llmApiKey;
     }
 
     public List<String> getTargetDocumentIds() { return targetDocumentIds; }
@@ -24,6 +32,9 @@ public class AnalysisCreateRequest {
     public String getCustomPrompt() { return customPrompt; }
     public void setCustomPrompt(String customPrompt) { this.customPrompt = customPrompt; }
 
+    public String getLlmApiKey() { return llmApiKey; }
+    public void setLlmApiKey(String llmApiKey) { this.llmApiKey = llmApiKey; }
+
     public static AnalysisCreateRequestBuilder builder() {
         return new AnalysisCreateRequestBuilder();
     }
@@ -32,6 +43,7 @@ public class AnalysisCreateRequest {
         private List<String> targetDocumentIds;
         private List<String> qaPerspectives;
         private String customPrompt;
+        private String llmApiKey;
 
         public AnalysisCreateRequestBuilder targetDocumentIds(List<String> targetDocumentIds) {
             this.targetDocumentIds = targetDocumentIds;
@@ -48,8 +60,13 @@ public class AnalysisCreateRequest {
             return this;
         }
 
+        public AnalysisCreateRequestBuilder llmApiKey(String llmApiKey) {
+            this.llmApiKey = llmApiKey;
+            return this;
+        }
+
         public AnalysisCreateRequest build() {
-            return new AnalysisCreateRequest(targetDocumentIds, qaPerspectives, customPrompt);
+            return new AnalysisCreateRequest(targetDocumentIds, qaPerspectives, customPrompt, llmApiKey);
         }
     }
 }

@@ -1,4 +1,5 @@
 -- DROP tables if they exist to reset schema (order is important due to constraints)
+DROP TABLE IF EXISTS report_test_case;
 DROP TABLE IF EXISTS report;
 DROP TABLE IF EXISTS evidence;
 DROP TABLE IF EXISTS risk_item;
@@ -64,6 +65,10 @@ CREATE TABLE test_case (
     expected_result TEXT NOT NULL,
     priority VARCHAR(20) NOT NULL,
     confidence_level VARCHAR(20),
+    category VARCHAR(100),
+    technique VARCHAR(255),
+    tdd_hint CLOB,
+    negative_scenario CLOB,
     CONSTRAINT fk_tc_job FOREIGN KEY (analysis_id) REFERENCES analysis_job(analysis_id) ON DELETE CASCADE,
     CONSTRAINT fk_tc_req FOREIGN KEY (requirement_id) REFERENCES requirement(requirement_id) ON DELETE CASCADE
 );
@@ -104,3 +109,14 @@ CREATE TABLE report (
 );
 CREATE INDEX idx_report_job ON report(analysis_id);
 CREATE INDEX idx_report_file ON report(file_id);
+
+-- 9. ReportTestCase (N:M Join Table)
+CREATE TABLE report_test_case (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    report_id VARCHAR(255) NOT NULL,
+    test_case_id VARCHAR(255) NOT NULL,
+    CONSTRAINT fk_rtc_report FOREIGN KEY (report_id) REFERENCES report(report_id) ON DELETE CASCADE,
+    CONSTRAINT fk_rtc_tc FOREIGN KEY (test_case_id) REFERENCES test_case(test_case_id) ON DELETE CASCADE
+);
+CREATE INDEX idx_rtc_report ON report_test_case(report_id);
+CREATE INDEX idx_rtc_tc ON report_test_case(test_case_id);

@@ -12,7 +12,10 @@ import java.util.List;
 public interface TestCaseRepository extends JpaRepository<TestCase, String> {
     List<TestCase> findByAnalysisJob_AnalysisId(String analysisId);
 
-    @Modifying
+    @Query("SELECT t FROM TestCase t JOIN t.analysisJob a WHERE a.project.projectId = :projectId")
+    List<TestCase> findByProjectId(@Param("projectId") String projectId);
+
+    @Modifying(clearAutomatically = true)
     @Query("DELETE FROM TestCase t WHERE t.analysisJob.analysisId IN :analysisIds")
     void deleteByAnalysisIds(@Param("analysisIds") List<String> analysisIds);
 }

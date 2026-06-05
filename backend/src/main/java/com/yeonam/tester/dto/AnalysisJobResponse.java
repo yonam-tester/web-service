@@ -7,14 +7,16 @@ public class AnalysisJobResponse {
     private String projectId;
     private String status;
     private LocalDateTime createdAt;
+    private String qaPerspective;
 
     public AnalysisJobResponse() {}
 
-    public AnalysisJobResponse(String analysisId, String projectId, String status, LocalDateTime createdAt) {
+    public AnalysisJobResponse(String analysisId, String projectId, String status, LocalDateTime createdAt, String qaPerspective) {
         this.analysisId = analysisId;
         this.projectId = projectId;
         this.status = status;
         this.createdAt = createdAt;
+        this.qaPerspective = qaPerspective;
     }
 
     public String getAnalysisId() { return analysisId; }
@@ -29,6 +31,9 @@ public class AnalysisJobResponse {
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 
+    public String getQaPerspective() { return qaPerspective; }
+    public void setQaPerspective(String qaPerspective) { this.qaPerspective = qaPerspective; }
+
     public static AnalysisJobResponseBuilder builder() {
         return new AnalysisJobResponseBuilder();
     }
@@ -38,6 +43,7 @@ public class AnalysisJobResponse {
         private String projectId;
         private String status;
         private LocalDateTime createdAt;
+        private String qaPerspective;
 
         public AnalysisJobResponseBuilder analysisId(String analysisId) {
             this.analysisId = analysisId;
@@ -59,8 +65,13 @@ public class AnalysisJobResponse {
             return this;
         }
 
+        public AnalysisJobResponseBuilder qaPerspective(String qaPerspective) {
+            this.qaPerspective = qaPerspective;
+            return this;
+        }
+
         public AnalysisJobResponse build() {
-            return new AnalysisJobResponse(analysisId, projectId, status, createdAt);
+            return new AnalysisJobResponse(analysisId, projectId, status, createdAt, qaPerspective);
         }
     }
 }
