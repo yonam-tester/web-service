@@ -54,12 +54,15 @@ public class TestCase {
     @Column(name = "negative_scenario", columnDefinition = "CLOB")
     private String negativeScenario;
 
+    @Column(name = "caution", columnDefinition = "VARCHAR(2000)")
+    private String caution;
+
     @OneToMany(mappedBy = "testCase", cascade = CascadeType.ALL, orphanRemoval = true)
     private java.util.List<Evidence> evidences = new java.util.ArrayList<>();
 
     public TestCase() {}
 
-    public TestCase(String testCaseId, AnalysisJob analysisJob, Requirement requirement, String testCaseName, String testScenario, String precondition, String testSteps, String expectedResult, String priority, String confidenceLevel, String category, String technique, String tddHint, String negativeScenario) {
+    public TestCase(String testCaseId, AnalysisJob analysisJob, Requirement requirement, String testCaseName, String testScenario, String precondition, String testSteps, String expectedResult, String priority, String confidenceLevel, String category, String technique, String tddHint, String negativeScenario, String caution) {
         this.testCaseId = testCaseId;
         this.analysisJob = analysisJob;
         this.requirement = requirement;
@@ -74,6 +77,7 @@ public class TestCase {
         this.technique = technique;
         this.tddHint = tddHint;
         this.negativeScenario = negativeScenario;
+        this.caution = caution;
     }
 
     public String getTestCaseId() { return testCaseId; }
@@ -118,6 +122,9 @@ public class TestCase {
     public String getNegativeScenario() { return negativeScenario; }
     public void setNegativeScenario(String negativeScenario) { this.negativeScenario = negativeScenario; }
 
+    public String getCaution() { return caution; }
+    public void setCaution(String caution) { this.caution = caution; }
+
     public java.util.List<Evidence> getEvidences() { return evidences; }
     public void setEvidences(java.util.List<Evidence> evidences) { this.evidences = evidences; }
 
@@ -140,6 +147,7 @@ public class TestCase {
         private String technique;
         private String tddHint;
         private String negativeScenario;
+        private String caution;
 
         public TestCaseBuilder testCaseId(String testCaseId) {
             this.testCaseId = testCaseId;
@@ -211,8 +219,13 @@ public class TestCase {
             return this;
         }
 
+        public TestCaseBuilder caution(String caution) {
+            this.caution = caution;
+            return this;
+        }
+
         public TestCase build() {
-            return new TestCase(testCaseId, analysisJob, requirement, testCaseName, testScenario, precondition, testSteps, expectedResult, priority, confidenceLevel, category, technique, tddHint, negativeScenario);
+            return new TestCase(testCaseId, analysisJob, requirement, testCaseName, testScenario, precondition, testSteps, expectedResult, priority, confidenceLevel, category, technique, tddHint, negativeScenario, caution);
         }
     }
 }

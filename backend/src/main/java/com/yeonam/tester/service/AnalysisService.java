@@ -38,6 +38,11 @@ public class AnalysisService {
     @Value("${ai.server.url:http://localhost:8000}")
     private String aiServerUrl;
 
+    @Value("${llm.direct:false}")
+    private boolean llmDirect;
+
+    private final AnalysisProcessor analysisProcessor;
+
     public AnalysisService(AnalysisJobRepository analysisJobRepository,
                            ProjectRepository projectRepository,
                            UploadedFileRepository fileRepository,
@@ -46,7 +51,8 @@ public class AnalysisService {
                            RiskItemRepository riskItemRepository,
                            EvidenceRepository evidenceRepository,
                            S3Client s3Client,
-                           ReportRepository reportRepository) {
+                           ReportRepository reportRepository,
+                           AnalysisProcessor analysisProcessor) {
         this.analysisJobRepository = analysisJobRepository;
         this.projectRepository = projectRepository;
         this.fileRepository = fileRepository;
@@ -56,6 +62,7 @@ public class AnalysisService {
         this.evidenceRepository = evidenceRepository;
         this.s3Client = s3Client;
         this.reportRepository = reportRepository;
+        this.analysisProcessor = analysisProcessor;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(5))
                 .build();
@@ -131,8 +138,20 @@ public class AnalysisService {
                 .map(UploadedFile::getS3Path)
                 .collect(Collectors.toList());
 
-        // 3. Send async trigger HTTP request to FastAPI server
-        triggerExternalAiServer(savedJob, s3Paths, request.getQaPerspectives(), mergedCustomPrompt, request.getLlmApiKey());
+        // 3. Trigger analysis processing (either internally or externally)
+        if (llmDirect) {
+            List<String> targetFileIds = targetFiles.stream()
+                    .map(UploadedFile::getFileId)
+                    .collect(Collectors.toList());
+            analysisProcessor.processDirectly(
+                    savedJob.getAnalysisId(),
+                    targetFileIds,
+                    mergedCustomPrompt,
+                    perspectiveStr
+            );
+        } else {
+            triggerExternalAiServer(savedJob, s3Paths, request.getQaPerspectives(), mergedCustomPrompt, request.getLlmApiKey());
+        }
 
         return AnalysisJobResponse.builder()
                 .analysisId(savedJob.getAnalysisId())
@@ -344,6 +363,7 @@ public class AnalysisService {
                     .technique(tc.getTechnique())
                     .tddHint(tc.getTddHint())
                     .negativeScenario(tc.getNegativeScenario())
+                    .caution(tc.getCaution())
                     .build();
         }).collect(Collectors.toList());
 

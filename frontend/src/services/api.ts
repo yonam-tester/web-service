@@ -93,6 +93,7 @@ export interface TestCase {
   technique?: string;
   tddHint?: string;
   negativeScenario?: string;
+  caution?: string;
   analysisId: string;
 }
 

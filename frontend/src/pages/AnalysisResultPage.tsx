@@ -306,6 +306,12 @@ export const AnalysisResultPage: React.FC = () => {
     );
   }
 
+  // Extract unique caution statements from test cases
+  const cautions = testCases
+    .map(tc => tc.caution)
+    .filter((c): c is string => !!c && c.trim() !== '')
+    .filter((value, index, self) => self.indexOf(value) === index);
+
   return (
     <div className="space-y-8 animate-fade-in max-w-7xl mx-auto">
       {/* 1. Top Progress Monitor (100% Completed status) */}
@@ -474,15 +480,30 @@ export const AnalysisResultPage: React.FC = () => {
                 )}
               </div>
 
-              {/* Integrity Warning helper banner */}
-              <div className="glass-panel p-md rounded-xl border border-white/10 space-y-3">
-                <div className="flex items-center gap-2 text-xs text-indigo-300 font-bold">
-                  <span className="material-symbols-outlined text-sm">verified</span>
-                  결과 무결성 보장
-                </div>
-                <p className="text-[11px] leading-relaxed text-slate-400">
-                  식별된 RAG 유사도 매핑 지수는 원본 문서 데이터와 90% 이상 일치하며, 백엔드 DB 설계 규격에 맞춰 검증되었습니다.
+              {/* Cautions dynamic panel */}
+              <div className="glass-panel p-md rounded-xl border border-white/10 space-y-4">
+                <h4 className="font-bold text-indigo-300 text-sm flex items-center gap-2">
+                  <span className="material-symbols-outlined text-sm">verified_user</span>
+                  테스트 실행 및 환경 주의 사항
+                </h4>
+                <p className="text-slate-400 text-xs leading-relaxed">
+                  AI가 요구사항 분석 결과와 지식 데이터베이스를 교차 검증하여 도출해 낸 테스트 실행 시의 제약 조건 및 환경 제약 사항입니다.
                 </p>
+
+                {cautions.length === 0 ? (
+                  <p className="text-[11px] leading-relaxed text-slate-500 italic">
+                    식별된 테스트 설계 분석 상 특이사항이 없습니다. 원본 데이터 무결성이 정상 보장됩니다.
+                  </p>
+                ) : (
+                  <div className="space-y-3 pt-2 border-t border-white/5">
+                    {cautions.map((item, idx) => (
+                      <div key={idx} className="flex gap-2 text-[11px] text-slate-300 border-t border-white/5 pt-3 first:border-0 first:pt-0">
+                        <span className="text-indigo-400 shrink-0 font-bold">•</span>
+                        <p className="leading-relaxed font-sans">{item}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>

@@ -24,7 +24,8 @@ MOCK_TEST_CASES = {
             "category": "test_technique",
             "technique": "Negative Testing Philosophy",
             "negativeScenario": "사용자가 임의로 비공개 혹은 비정상 리포지토리 주소를 강제 제출하여 시스템 오류나 유효성 검사 우회를 시도하는 부정 시나리오 검증.",
-            "tddHint": "① Invalid Github URL Mock 객체를 주입하고 throw되는 IllegalArgumentException이 Controller 단에서 400 Bad Request로 처리되는지 assert 던질 것."
+            "tddHint": "① Invalid Github URL Mock 객체를 주입하고 throw되는 IllegalArgumentException이 Controller 단에서 400 Bad Request로 처리되는지 assert 던질 것.",
+            "caution": "깃허브 API 호출 한도(Rate Limit) 또는 비공개 저장소 접근 토큰 유효성에 따라 API 응답 코드가 달라질 수 있으므로 실행 전에 토큰 환경 변수를 필히 점검해야 합니다."
         }
     ],
     "REQ-002": [
@@ -41,7 +42,8 @@ MOCK_TEST_CASES = {
             "category": "test_technique",
             "technique": "Negative Testing Philosophy",
             "negativeScenario": "비인가된 확장자 파일(.hwp, .exe 등)을 업로드 시도하여 API 인터페이스 무결성 파괴를 시도하는 부정 시나리오 검증.",
-            "tddHint": "① FileService.uploadFile 호출 시 허용되지 않는 확장자인 경우 IllegalArgumentException이 발생하는지 assertThrows로 검증할 것."
+            "tddHint": "① FileService.uploadFile 호출 시 허용되지 않는 확장자인 경우 IllegalArgumentException이 발생하는지 assertThrows로 검증할 것.",
+            "caution": "프론트엔드 단의 드래그 앤 드롭 업로드 제한은 브라우저 렌더링 엔진 종류(Chromium, WebKit 등)에 따라 예외 이벤트 핸들링 방식이 다를 수 있으므로 모바일 에뮬레이터 테스트 병행이 권장됩니다."
         }
     ]
 }
@@ -91,7 +93,8 @@ def build_prompt(req_text: str, evidences: List[Dict], custom_prompt: str, persp
             f"    \"category\": \"test_level | test_technique | non_functional | qa_concept\",\n"
             f"    \"technique\": \"적용한 QA 설계 기법 명칭 (예: Negative Testing)\",\n"
             f"    \"tddHint\": \"TDD 개발 흐름 팁 및 assert 비교 가이드\",\n"
-            f"    \"negativeScenario\": \"부정/예외 상황 상세 시나리오\"\n"
+            f"    \"negativeScenario\": \"부정/예외 상황 상세 시나리오\",\n"
+            f"    \"caution\": \"테스트 실행 시의 환경 제약 사항 또는 가정에 근거하여 주의가 요구되는 사유(예: 서드파티 모킹 필요 등) 설명\"\n"
             f"  }}\n"
             f"]\n"
             f"```\n\n"
@@ -184,6 +187,8 @@ async def call_llm_with_key(prompt: str, llm_api_key: Optional[str] = None) -> L
                     tc["confidenceLevel"] = "MEDIUM"
                 if not tc.get("riskTags"):
                     tc["riskTags"] = ["#추가_검토"]
+                if not tc.get("caution"):
+                    tc["caution"] = "추가 검토 필요 (가정에 의존한 테스트이므로 실행 시 주의 요망)"
                     
             return test_cases
             

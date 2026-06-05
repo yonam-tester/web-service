@@ -65,18 +65,58 @@ def load_knowledge_base() -> List[Dict]:
                     file_cards_count = 0
                     if isinstance(data, list):
                         for item in data:
+                            content = item.get("content") or item.get("description")
+                            if not content:
+                                parts = []
+                                if item.get("technique"):
+                                    parts.append(f"테스트 기법: {item.get('technique')}")
+                                if item.get("apply_when"):
+                                    apply_str = " / ".join(item.get("apply_when")) if isinstance(item.get("apply_when"), list) else item.get("apply_when")
+                                    parts.append(f"적용 조건: {apply_str}")
+                                if item.get("qa_perspective"):
+                                    p_str = " / ".join(item.get("qa_perspective")) if isinstance(item.get("qa_perspective"), list) else item.get("qa_perspective")
+                                    parts.append(f"QA 관점: {p_str}")
+                                if item.get("risk_type"):
+                                    parts.append(f"위험 유형: {item.get('risk_type')}")
+                                if item.get("tdd_hint"):
+                                    parts.append(f"TDD 힌트: {item.get('tdd_hint')}")
+                                if item.get("example_scenario"):
+                                    parts.append(f"예시 시나리오: {item.get('example_scenario')}")
+                                if item.get("evidence"):
+                                    parts.append(f"근거: {item.get('evidence')}")
+                                content = " ".join(parts)
                             cards.append({
                                 "category": item.get("category", "General"),
                                 "title": item.get("title", ""),
-                                "content": item.get("content", item.get("description", ""))
+                                "content": content
                             })
                             file_cards_count += 1
                     elif isinstance(data, dict) and "cards" in data:
                         for item in data["cards"]:
+                            content = item.get("content") or item.get("description")
+                            if not content:
+                                parts = []
+                                if item.get("technique"):
+                                    parts.append(f"테스트 기법: {item.get('technique')}")
+                                if item.get("apply_when"):
+                                    apply_str = " / ".join(item.get("apply_when")) if isinstance(item.get("apply_when"), list) else item.get("apply_when")
+                                    parts.append(f"적용 조건: {apply_str}")
+                                if item.get("qa_perspective"):
+                                    p_str = " / ".join(item.get("qa_perspective")) if isinstance(item.get("qa_perspective"), list) else item.get("qa_perspective")
+                                    parts.append(f"QA 관점: {p_str}")
+                                if item.get("risk_type"):
+                                    parts.append(f"위험 유형: {item.get('risk_type')}")
+                                if item.get("tdd_hint"):
+                                    parts.append(f"TDD 힌트: {item.get('tdd_hint')}")
+                                if item.get("example_scenario"):
+                                    parts.append(f"예시 시나리오: {item.get('example_scenario')}")
+                                if item.get("evidence"):
+                                    parts.append(f"근거: {item.get('evidence')}")
+                                content = " ".join(parts)
                             cards.append({
                                 "category": item.get("category", "General"),
                                 "title": item.get("title", ""),
-                                "content": item.get("content", item.get("description", ""))
+                                "content": content
                             })
                             file_cards_count += 1
                     logger.info(f"Loaded {file_cards_count} cards from {file_name}")

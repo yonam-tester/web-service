@@ -70,6 +70,7 @@ CREATE TABLE test_case (
     technique VARCHAR(255),
     tdd_hint CLOB,
     negative_scenario CLOB,
+    caution VARCHAR(2000),
     CONSTRAINT fk_tc_job FOREIGN KEY (analysis_id) REFERENCES analysis_job(analysis_id) ON DELETE CASCADE,
     CONSTRAINT fk_tc_req FOREIGN KEY (requirement_id) REFERENCES requirement(requirement_id) ON DELETE CASCADE
 );

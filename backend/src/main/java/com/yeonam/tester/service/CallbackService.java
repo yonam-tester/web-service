@@ -136,6 +136,7 @@ public class CallbackService {
                     .technique(tcDto.getTechnique())
                     .tddHint(tcDto.getTddHint())
                     .negativeScenario(tcDto.getNegativeScenario())
+                    .caution(tcDto.getCaution())
                     .build();
 
             testCaseRepository.save(testCase);

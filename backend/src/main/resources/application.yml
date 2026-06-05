@@ -37,7 +37,14 @@ aws:
     buckets:
       documents: yeonam-documents
       reports: yeonam-reports
+  region: ${AWS_REGION:us-east-1}
+  bedrock:
+    model-id: ${AWS_BEDROCK_MODEL_ID:anthropic.claude-3-haiku-20240307-v1:0}
 
 ai:
   server:
     url: ${AI_SERVER_URL:http://localhost:8000}
+
+llm:
+  provider: ${LLM_PROVIDER:mock}
+  direct: ${LLM_DIRECT:false}
