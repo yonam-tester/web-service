@@ -208,10 +208,9 @@ public class AnalysisService {
                 System.err.println("AI server rejected job trigger. Status: " + response.statusCode() + ", Body: " + response.body());
             }
         }).exceptionally(ex -> {
-            // Fallback for local testing when FastAPI server is offline:
-            // We set status to PROCESSING to simulate async webhook callback during demo/offline.
-            System.err.println("Failed to contact AI server (" + targetUrl + "): " + ex.getMessage() + ". Setting status to PROCESSING for local demo mock.");
-            job.setStatus("PROCESSING");
+            System.err.println("Failed to contact AI server (" + targetUrl + "): " + ex.getMessage());
+            job.setStatus("FAILED");
+            job.setSummary("AI 서버에 연결할 수 없습니다. 서버 상태를 확인해 주세요.");
             analysisJobRepository.save(job);
             return null;
         });
