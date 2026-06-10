@@ -33,15 +33,13 @@ services:
 
   rag-server:
     build:
-      context: ./rag_server
+      context: ./llm_server
       dockerfile: Dockerfile
     container_name: yeonam-rag
     expose:
       - "8000"
     env_file:
       - .env
-    volumes:
-      - ./rag_server/knowledge_base:/app/knowledge_base:ro
     networks:
       - yeonam-network
     restart: always
